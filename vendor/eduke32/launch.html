@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Duke Browser Build</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #07090d;
+        --panel: rgba(10, 14, 20, 0.9);
+        --panel-border: rgba(234, 189, 103, 0.22);
+        --ink: #f3e6bf;
+        --accent: #f1a255;
+        --muted: rgba(243, 230, 191, 0.68);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background:
+          radial-gradient(circle at top, rgba(241, 162, 85, 0.18), transparent 26%),
+          linear-gradient(180deg, #090d12 0%, #030407 100%);
+        color: var(--ink);
+        font: 15px/1.4 Georgia, serif;
+      }
+
+      body {
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+      }
+
+      #app {
+        position: relative;
+        width: 100vw;
+        height: 100vh;
+        display: grid;
+        place-items: center;
+      }
+
+      #canvas-wrap {
+        position: relative;
+        width: min(calc(100vw - 24px), calc((100vh - 24px) * 4 / 3));
+        height: min(calc(100vh - 24px), calc((100vw - 24px) * 3 / 4));
+        aspect-ratio: 4 / 3;
+        display: grid;
+        place-items: center;
+        background: #000;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+      }
+
+      #canvas {
+        width: 100% !important;
+        height: 100% !important;
+        display: block;
+        background: #000;
+        object-fit: contain;
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+        outline: none;
+      }
+
+      #hud {
+        position: fixed;
+        top: 16px;
+        left: 16px;
+        right: 16px;
+        z-index: 2;
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        align-items: flex-start;
+        pointer-events: none;
+      }
+
+      #status-panel,
+      #controls {
+        pointer-events: auto;
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 14px;
+        padding: 10px 12px;
+        backdrop-filter: blur(8px);
+      }
+
+      #status-panel {
+        min-width: min(420px, 55vw);
+      }
+
+      #status-kicker {
+        margin: 0 0 6px;
+        color: var(--accent);
+        font-size: 11px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      #status {
+        margin: 0;
+      }
+
+      #progress {
+        width: 100%;
+        margin-top: 8px;
+      }
+
+      #controls {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 14px;
+      }
+
+      #test-controls {
+        position: fixed;
+        right: 16px;
+        bottom: 16px;
+        z-index: 3;
+        display: flex;
+        gap: 8px;
+        pointer-events: auto;
+      }
+
+      .test-pad {
+        width: 84px;
+        height: 42px;
+        border: 1px solid rgba(241, 162, 85, 0.35);
+        border-radius: 10px;
+        background: rgba(12, 16, 24, 0.82);
+        color: var(--ink);
+        font: 12px/1 Georgia, serif;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        user-select: none;
+        touch-action: none;
+        display: grid;
+        place-items: center;
+      }
+
+      #controls label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      #controls button {
+        border: 1px solid var(--panel-border);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.08);
+        color: var(--ink);
+        padding: 8px 10px;
+        font: inherit;
+        cursor: pointer;
+      }
+
+      #output {
+        position: fixed;
+        left: 16px;
+        right: 16px;
+        bottom: 16px;
+        z-index: 2;
+        display: none;
+        min-height: 140px;
+        max-height: 28vh;
+        background: rgba(0, 0, 0, 0.88);
+        color: #d8e9ff;
+        border: 1px solid rgba(216, 233, 255, 0.16);
+        border-radius: 12px;
+        padding: 12px;
+        resize: none;
+        font: 12px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      body[data-ready="true"] #status-panel {
+        opacity: 0;
+        transform: translateY(-8px);
+        pointer-events: none;
+        transition: opacity 180ms ease, transform 180ms ease;
+      }
+
+      body[data-ready="true"] #progress {
+        display: none;
+      }
+
+      body[data-ready="true"] #controls {
+        opacity: 0.82;
+      }
+
+      @media (max-width: 900px) {
+        #hud {
+          top: 10px;
+          left: 10px;
+          right: 10px;
+          flex-direction: column;
+        }
+
+        #status-panel {
+          min-width: 0;
+          width: 100%;
+        }
+
+        #controls {
+          width: 100%;
+          justify-content: space-between;
+          flex-wrap: wrap;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div id="hud">
+        <div id="status-panel">
+          <div id="status-kicker">EDuke32 Web Runtime</div>
+          <div id="status">Booting...</div>
+          <progress id="progress" hidden max="100" value="0"></progress>
+        </div>
+        <div id="controls">
+          <label><input type="checkbox" id="resize" /> Resize canvas</label>
+          <label><input type="checkbox" id="pointerLock" checked /> Lock pointer</label>
+          <button id="fullscreen-btn" type="button">Fullscreen</button>
+        </div>
+      </div>
+
+      <div id="canvas-wrap">
+        <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="0"></canvas>
+      </div>
+
+      <textarea id="output" rows="8" aria-label="Runtime log"></textarea>
+      <div id="test-controls" aria-hidden="true">
+        <div class="test-pad" data-gamefunc="0">Forward</div>
+        <div class="test-pad" data-gamefunc="3">Turn</div>
+        <div class="test-pad" data-gamefunc="5">Fire</div>
+      </div>
+    </div>
+
+    <script>
+      const statusElement = document.getElementById("status");
+      const progressElement = document.getElementById("progress");
+      const canvasElement = document.getElementById("canvas");
+      const outputElement = document.getElementById("output");
+      const fullscreenButton = document.getElementById("fullscreen-btn");
+      const pointerLockElement = document.getElementById("pointerLock");
+      let allowBrowserFullscreen = false;
+
+      const blockImplicitFullscreenRequests = () => {
+        const fullscreenApis = [
+          [Element.prototype, "requestFullscreen"],
+          [Element.prototype, "webkitRequestFullscreen"],
+          [Element.prototype, "webkitRequestFullScreen"],
+          [Element.prototype, "mozRequestFullScreen"],
+          [Element.prototype, "msRequestFullscreen"],
+        ];
+
+        for (const [proto, methodName] of fullscreenApis) {
+          const original = proto?.[methodName];
+          if (typeof original !== "function" || original.__edukeWrapped) {
+            continue;
+          }
+
+          const wrapped = function (...args) {
+            if (!allowBrowserFullscreen) {
+              console.log("EDUKE_FULLSCREEN_BLOCKED", methodName);
+              return Promise.reject?.(new DOMException("Implicit fullscreen blocked", "NotAllowedError"));
+            }
+            return original.apply(this, args);
+          };
+
+          wrapped.__edukeWrapped = true;
+          proto[methodName] = wrapped;
+        }
+      };
+
+      blockImplicitFullscreenRequests();
+      const params = new URLSearchParams(window.location.search);
+      const autotestEnabled = params.get("autotest") === "1";
+      window.__edukeAutotestConfig = {
+        enabled: autotestEnabled,
+        start: performance.now(),
+        sampleCounter: 0,
+      };
+      const testControlElements = Array.from(document.querySelectorAll("[data-gamefunc]"));
+      const GAMEFUNCS = Object.freeze({
+        moveForward: 0,
+        moveBackward: 1,
+        turnLeft: 2,
+        turnRight: 3,
+        strafe: 4,
+        fire: 5,
+        open: 6,
+        run: 7,
+        jump: 9,
+        crouch: 10,
+        strafeLeft: 15,
+        strafeRight: 16,
+      });
+
+      window.__edukeInjectedButtonsLow = 0;
+      window.__edukeInjectedMouseX = 0;
+      window.__edukeInjectedMouseY = 0;
+
+      const buttonSources = new Map();
+
+      const syncInjectedButtons = () => {
+        let mask = 0;
+        for (const [button, sources] of buttonSources) {
+          if (sources.size > 0) {
+            mask |= 1 << button;
+          }
+        }
+        window.__edukeInjectedButtonsLow = mask;
+      };
+
+      const setInjectedButton = (button, active, source = `api:${button}`) => {
+        let sources = buttonSources.get(button);
+        if (!sources) {
+          sources = new Set();
+          buttonSources.set(button, sources);
+        }
+
+        if (active) {
+          sources.add(source);
+        } else {
+          sources.delete(source);
+          if (sources.size === 0) {
+            buttonSources.delete(button);
+          }
+        }
+
+        syncInjectedButtons();
+      };
+
+      const clearInjectedInput = () => {
+        buttonSources.clear();
+        window.__edukeInjectedButtonsLow = 0;
+        window.__edukeInjectedMouseX = 0;
+        window.__edukeInjectedMouseY = 0;
+      };
+
+      window.__edukeSetInjectedButton = setInjectedButton;
+      window.__edukeClearInjectedInput = clearInjectedInput;
+      window.__edukeRunActionSequence = (actions, sampleMs = 100) => {
+        clearInjectedInput();
+        window.__edukeSequenceSamples = [];
+        let lastSampleAt = -Infinity;
+        const sample = (now) => {
+          const state = window.__edukeState || {};
+          const entry = {
+            t: now,
+            x: state.x ?? 0,
+            y: state.y ?? 0,
+            ang: state.ang ?? 0,
+            ammo: state.ammo ?? 0,
+            kickback: state.kickback ?? 0,
+            frameCounter: state.frameCounter ?? 0,
+          };
+          window.__edukeSequenceSamples.push(entry);
+          if (window.__edukeSequenceSamples.length > 256) {
+            window.__edukeSequenceSamples.shift();
+          }
+          console.log("EDUKE_SAMPLE", JSON.stringify(entry));
+        };
+        const maxEnd = actions.reduce((acc, action) => Math.max(acc, action.start + action.duration), 0);
+        const start = performance.now();
+
+        const tick = (now) => {
+          const elapsed = now - start;
+          clearInjectedInput();
+
+          for (const [index, action] of actions.entries()) {
+            if (elapsed >= action.start && elapsed < action.start + action.duration) {
+              setInjectedButton(action.button, true, `autotest:${index}`);
+            }
+          }
+
+          if (now - lastSampleAt >= sampleMs) {
+            lastSampleAt = now;
+            sample(now);
+          }
+
+          if (elapsed < maxEnd + sampleMs * 2) {
+            requestAnimationFrame(tick);
+          } else {
+            clearInjectedInput();
+            sample(now);
+            console.log("EDUKE_SEQUENCE_DONE");
+          }
+        };
+
+        requestAnimationFrame(tick);
+      };
+
+      const startAutotest = () => {
+        if (!autotestEnabled || window.__edukeAutotestStarted) {
+          return;
+        }
+        window.__edukeAutotestStarted = true;
+        console.log("EDUKE_AUTOTEST_ARMED");
+        pointerLockElement.checked = false;
+        clearInjectedInput();
+
+        const waitForState = () => {
+          const state = window.__edukeState;
+          if (!state || !state.frameCounter || state.gm !== 4) {
+            requestAnimationFrame(waitForState);
+            return;
+          }
+
+          console.log("EDUKE_AUTOTEST_BEGIN");
+          window.__edukeAutotestConfig.start = performance.now();
+          window.__edukeAutotestConfig.sampleCounter = 0;
+          window.__edukeAutotestConfig.firstState = null;
+          window.__edukeAutotestConfig.lastState = null;
+          window.__edukeAutotestConfig.resultLogged = false;
+
+          window.__edukeRunActionSequence(
+            [
+              { button: GAMEFUNCS.moveForward, start: 0, duration: 1200 },
+              { button: GAMEFUNCS.turnRight, start: 1800, duration: 900 },
+              { button: GAMEFUNCS.fire, start: 3200, duration: 250 },
+            ],
+            120,
+          );
+
+          const finish = () => {
+            const samples = window.__edukeSequenceSamples || [];
+            if (samples.length < 2) {
+              requestAnimationFrame(finish);
+              return;
+            }
+
+            const first = samples[0];
+            const last = samples[samples.length - 1];
+            const dx = (last.x || 0) - (first.x || 0);
+            const dy = (last.y || 0) - (first.y || 0);
+            const rawAng = (((last.ang || 0) - (first.ang || 0) + 1024) % 2048) - 1024;
+            const movedEnough = Math.hypot(dx, dy) > 128;
+            const turnedEnough = Math.abs(rawAng) > 8;
+            const firedEnough = (last.ammo || 0) < (first.ammo || 0) || (last.kickback || 0) > (first.kickback || 0);
+
+            const result = {
+              first,
+              last,
+              sampleCount: samples.length,
+              assertions: {
+                movedEnough,
+                turnedEnough,
+                firedEnough,
+              },
+            };
+
+            console.log("EDUKE_AUTOTEST_RESULT", JSON.stringify(result));
+            document.body.dataset.autotest = movedEnough && turnedEnough && firedEnough ? "pass" : "fail";
+          };
+
+          setTimeout(finish, 4300);
+        };
+
+        requestAnimationFrame(waitForState);
+      };
+
+      const keyToGamefunc = new Map([
+        ["ArrowUp", GAMEFUNCS.moveForward],
+        ["KeyW", GAMEFUNCS.moveForward],
+        ["ArrowDown", GAMEFUNCS.moveBackward],
+        ["KeyS", GAMEFUNCS.moveBackward],
+        ["ArrowLeft", GAMEFUNCS.turnLeft],
+        ["KeyA", GAMEFUNCS.strafeLeft],
+        ["ArrowRight", GAMEFUNCS.turnRight],
+        ["KeyD", GAMEFUNCS.strafeRight],
+        ["ShiftLeft", GAMEFUNCS.run],
+        ["ShiftRight", GAMEFUNCS.run],
+        ["ControlLeft", GAMEFUNCS.fire],
+        ["ControlRight", GAMEFUNCS.fire],
+        ["Space", GAMEFUNCS.jump],
+        ["KeyC", GAMEFUNCS.crouch],
+      ]);
+
+      const focusCanvas = () => {
+        canvasElement.focus({ preventScroll: true });
+      };
+
+      const resyncCanvasPresentation = () => {
+        canvasElement.style.width = "100%";
+        canvasElement.style.height = "100%";
+        canvasElement.style.display = "block";
+        requestAnimationFrame(() => {
+          canvasElement.style.width = "100%";
+          canvasElement.style.height = "100%";
+        });
+      };
+
+      const isMenuActive = () => ((window.__edukeState?.gm || 0) & 0x1) !== 0;
+
+      const requestPointerLockIfEnabled = () => {
+        if (
+          pointerLockElement.checked &&
+          !isMenuActive() &&
+          document.pointerLockElement !== canvasElement &&
+          typeof canvasElement.requestPointerLock === "function"
+        ) {
+          const result = canvasElement.requestPointerLock();
+          if (result && typeof result.catch === "function") {
+            result.catch(() => {});
+          }
+        }
+      };
+
+      canvasElement.addEventListener(
+        "webglcontextlost",
+        (event) => {
+          event.preventDefault();
+          alert("WebGL context lost. Reload the page.");
+        },
+        false,
+      );
+
+      canvasElement.addEventListener("pointerdown", () => {
+        focusCanvas();
+      });
+
+      canvasElement.addEventListener("mousedown", (event) => {
+        if (event.button === 0) {
+          if (isMenuActive()) {
+            focusCanvas();
+            return;
+          }
+          if (pointerLockElement.checked && document.pointerLockElement !== canvasElement) {
+            focusCanvas();
+            requestPointerLockIfEnabled();
+            event.preventDefault();
+            return;
+          }
+          setInjectedButton(GAMEFUNCS.fire, true, "mouse:0");
+          event.preventDefault();
+        } else if (event.button === 2) {
+          setInjectedButton(GAMEFUNCS.open, true, "mouse:2");
+          event.preventDefault();
+        }
+      });
+
+      canvasElement.addEventListener("mouseup", (event) => {
+        if (event.button === 0) {
+          if (isMenuActive()) {
+            return;
+          }
+          setInjectedButton(GAMEFUNCS.fire, false, "mouse:0");
+          event.preventDefault();
+        } else if (event.button === 2) {
+          setInjectedButton(GAMEFUNCS.open, false, "mouse:2");
+          event.preventDefault();
+        }
+      });
+
+      canvasElement.addEventListener("mouseleave", () => {
+        if (document.pointerLockElement !== canvasElement) {
+          window.__edukeInjectedMouseX = 0;
+          window.__edukeInjectedMouseY = 0;
+        }
+      });
+
+      canvasElement.addEventListener("blur", () => {
+        clearInjectedInput();
+      });
+
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) {
+          clearInjectedInput();
+        }
+      });
+
+      window.addEventListener("pagehide", () => {
+        clearInjectedInput();
+      });
+
+      window.addEventListener("blur", () => {
+        clearInjectedInput();
+      });
+
+      document.addEventListener("pointerlockchange", () => {
+        if (document.pointerLockElement !== canvasElement) {
+          clearInjectedInput();
+          resyncCanvasPresentation();
+          focusCanvas();
+        }
+      });
+
+      document.addEventListener("fullscreenchange", () => {
+        clearInjectedInput();
+        resyncCanvasPresentation();
+        focusCanvas();
+      });
+
+      window.addEventListener("mouseup", () => {
+        for (const element of testControlElements) {
+          setInjectedButton(Number(element.dataset.gamefunc), false, `pad:${element.dataset.gamefunc}`);
+        }
+        setInjectedButton(GAMEFUNCS.fire, false, "mouse:0");
+        setInjectedButton(GAMEFUNCS.open, false, "mouse:2");
+      });
+
+      window.addEventListener("keydown", (event) => {
+        const gamefunc = keyToGamefunc.get(event.code);
+        if (gamefunc !== undefined) {
+          setInjectedButton(gamefunc, true, `key:${event.code}`);
+          focusCanvas();
+          event.preventDefault();
+        }
+      });
+
+      window.addEventListener("keyup", (event) => {
+        const gamefunc = keyToGamefunc.get(event.code);
+        if (gamefunc !== undefined) {
+          setInjectedButton(gamefunc, false, `key:${event.code}`);
+          event.preventDefault();
+        }
+      });
+
+      canvasElement.addEventListener("mousemove", (event) => {
+        if (document.activeElement === canvasElement || document.pointerLockElement === canvasElement) {
+          window.__edukeInjectedMouseX += event.movementX || 0;
+          window.__edukeInjectedMouseY += event.movementY || 0;
+        }
+      });
+
+      for (const element of testControlElements) {
+        const gamefunc = Number(element.dataset.gamefunc);
+
+        element.addEventListener("mousedown", (event) => {
+          setInjectedButton(gamefunc, true, `pad:${gamefunc}`);
+          focusCanvas();
+          event.preventDefault();
+        });
+
+        element.addEventListener("mouseup", (event) => {
+          setInjectedButton(gamefunc, false, `pad:${gamefunc}`);
+          event.preventDefault();
+        });
+
+        element.addEventListener("mouseleave", () => {
+          setInjectedButton(gamefunc, false, `pad:${gamefunc}`);
+        });
+      }
+
+      window.addEventListener("keydown", () => {
+        if (document.activeElement !== canvasElement) {
+          focusCanvas();
+        }
+      });
+
+      const setStatus = (text) => {
+        if (!setStatus.last) {
+          setStatus.last = { time: Date.now(), text: "" };
+        }
+        if (text === setStatus.last.text) {
+          return;
+        }
+
+        const match = text && text.match(/([^(]+)\((\d+(\.\d+)?)\/(\d+)\)/);
+        const now = Date.now();
+        if (match && now - setStatus.last.time < 30) {
+          return;
+        }
+
+        setStatus.last = { time: now, text };
+        if (match) {
+          statusElement.textContent = match[1].trim();
+          progressElement.hidden = false;
+          progressElement.value = 100 * parseInt(match[2], 10);
+          progressElement.max = 100 * parseInt(match[4], 10);
+          return;
+        }
+
+        progressElement.hidden = true;
+        statusElement.textContent = text || "";
+      };
+
+      const markReadyIfRunning = () => {
+        if (
+          window.Module?.calledRun ||
+          window.Module?.ready === true ||
+          document.title.includes("Duke Nukem") ||
+          document.title.includes("WEB ") ||
+          document.title.includes("HOLLYWOOD HOLOCAUST")
+        ) {
+          document.body.dataset.ready = "true";
+          startAutotest();
+        }
+      };
+
+      const titleObserver = new MutationObserver(markReadyIfRunning);
+      titleObserver.observe(document.querySelector("title"), { childList: true });
+      setInterval(markReadyIfRunning, 250);
+
+      fullscreenButton.addEventListener("click", () => {
+        focusCanvas();
+        allowBrowserFullscreen = true;
+        try {
+          Module.requestFullscreen(
+            pointerLockElement.checked,
+            document.getElementById("resize").checked,
+          );
+        } finally {
+          setTimeout(() => {
+            allowBrowserFullscreen = false;
+          }, 0);
+        }
+      });
+
+      window.addEventListener("resize", () => {
+        resyncCanvasPresentation();
+      });
+
+      var Module = {
+        elementPointerLock: false,
+        onRuntimeInitialized() {
+          Module.ready = true;
+          document.body.dataset.ready = "true";
+          focusCanvas();
+          startAutotest();
+        },
+        keyboardListeningElement: canvasElement,
+        print(...args) {
+          console.log(...args);
+          const line = args.join(" ");
+          outputElement.value += `${line}\n`;
+          outputElement.scrollTop = outputElement.scrollHeight;
+        },
+        canvas: canvasElement,
+        setStatus,
+        totalDependencies: 0,
+        monitorRunDependencies(left) {
+          this.totalDependencies = Math.max(this.totalDependencies, left);
+          if (left) {
+            setStatus(`Preparing... (${this.totalDependencies - left}/${this.totalDependencies})`);
+          } else {
+            setStatus("Running...");
+            document.body.dataset.ready = "true";
+          }
+        },
+      };
+
+      setStatus("Downloading...");
+      window.onerror = (message) => {
+        setStatus("Exception thrown, see JavaScript console");
+        console.error("[post-exception status]", message);
+      };
+    </script>
+    <script async src="eduke32-web.js"></script>
+  </body>
+</html>

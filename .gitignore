@@ -1,0 +1,28 @@
+.DS_Store
+
+# Local toolchain
+.emsdk/
+
+# Build and temporary probe artifacts
+build/
+tmp-*.png
+tmp-*.html
+tmp-*.json
+
+# Proprietary game data and extracted assets
+imports/
+exports/
+
+# Generated EDuke32/browser artifacts
+vendor/eduke32/eduke32-web.data
+vendor/eduke32/eduke32-web.html
+vendor/eduke32/eduke32-web.js
+vendor/eduke32/eduke32-web.wasm
+vendor/eduke32/eduke32.data
+vendor/eduke32/eduke32.html
+vendor/eduke32/eduke32.js
+vendor/eduke32/eduke32.wasm
+vendor/eduke32/eduke32.dat
+vendor/eduke32/mapster32.data
+vendor/eduke32/mapster32.js
+vendor/eduke32/mapster32.wasm

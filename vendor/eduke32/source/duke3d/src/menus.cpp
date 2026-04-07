@@ -153,9 +153,20 @@ static void Menu_DrawTopBarCaption(const char *caption, const vec2_t origin)
     captionmenutext(origin.x + (MENU_MARGIN_CENTER<<16), origin.y + TopBarY, t);
 }
 
+static FORCE_INLINE int32_t Menu_VisualAnimTick120(void)
+{
+#ifdef __EMSCRIPTEN__
+    // Browser menu redraw is frame-driven; using a frame counter keeps the
+    // spinning nuke and related visual-only animation from stalling.
+    return (int32_t)(g_frameCounter << 1);
+#else
+    return timer120();
+#endif
+}
+
 static FORCE_INLINE int32_t Menu_CursorShade(void)
 {
-    return VM_OnEventWithReturn(EVENT_MENUCURSORSHADE, -1, myconnectindex, 4-(sintable[(timer120()<<4)&2047]>>11));
+    return VM_OnEventWithReturn(EVENT_MENUCURSORSHADE, -1, myconnectindex, 4-(sintable[(Menu_VisualAnimTick120()<<4)&2047]>>11));
 }
 static void Menu_DrawCursorCommon(int32_t x, int32_t y, int32_t z, int32_t picnum, int32_t ydim_upper = 0, int32_t ydim_lower = ydim-1)
 {
@@ -164,12 +175,12 @@ static void Menu_DrawCursorCommon(int32_t x, int32_t y, int32_t z, int32_t picnu
 static void Menu_DrawCursorLeft(int32_t x, int32_t y, int32_t z)
 {
     if (FURY) return;
-    Menu_DrawCursorCommon(x, y, z, VM_OnEventWithReturn(EVENT_MENUCURSORLEFT, -1, myconnectindex, SPINNINGNUKEICON+((timer120()>>3)%7)));
+    Menu_DrawCursorCommon(x, y, z, VM_OnEventWithReturn(EVENT_MENUCURSORLEFT, -1, myconnectindex, SPINNINGNUKEICON+((Menu_VisualAnimTick120()>>3)%7)));
 }
 static void Menu_DrawCursorRight(int32_t x, int32_t y, int32_t z)
 {
     if (FURY) return;
-    Menu_DrawCursorCommon(x, y, z, VM_OnEventWithReturn(EVENT_MENUCURSORRIGHT, -1, myconnectindex, SPINNINGNUKEICON+6-((6+(timer120()>>3))%7)));
+    Menu_DrawCursorCommon(x, y, z, VM_OnEventWithReturn(EVENT_MENUCURSORRIGHT, -1, myconnectindex, SPINNINGNUKEICON+6-((6+(Menu_VisualAnimTick120()>>3))%7)));
 }
 static void Menu_DrawCursorTextTile(int32_t x, int32_t y, int32_t h, int32_t picnum, vec2_16_t const & siz, int32_t ydim_upper = 0, int32_t ydim_lower = ydim-1)
 {
@@ -186,7 +197,7 @@ static void Menu_DrawCursorText(int32_t x, int32_t y, int32_t h, int32_t ydim_up
         return;
     }
 
-    Menu_DrawCursorTextTile(x, y, h, SPINNINGNUKEICON+((timer120()>>3)%7), siz, ydim_upper, ydim_lower);
+    Menu_DrawCursorTextTile(x, y, h, SPINNINGNUKEICON+((Menu_VisualAnimTick120()>>3)%7), siz, ydim_upper, ydim_lower);
 }
 
 
@@ -4904,6 +4915,13 @@ int32_t Menu_Anim_SinInLeft(MenuAnimation_t *animdata)
 
 void Menu_AnimateChange(int32_t cm, MenuAnimationType_t animtype)
 {
+#ifdef __EMSCRIPTEN__
+    m_animation.start  = 0;
+    m_animation.length = 0;
+    Menu_Change(cm);
+    return;
+#endif
+
     if (FURY)
     {
         m_animation.start  = 0;
@@ -5460,7 +5478,7 @@ void Menu_Open(uint8_t playerID)
     I_ClearAllInput();
 
     mouseReadAbs(&m_prevmousepos, &g_mouseAbs);
-    m_mouselastactivity = -M_MOUSETIMEOUT;
+    m_mouselastactivity = timer120();
 
 #if !defined EDUKE32_TOUCH_DEVICES
     m_mousewake_watchpoint = 0;
@@ -8114,9 +8132,15 @@ void M_DisplayMenus(void)
     if (!Menu_IsTextInput(m_currentMenu) && KB_KeyPressed(sc_Q))
         Menu_AnimateChange(MENU_QUIT, MA_Advance);
 
+#ifdef __EMSCRIPTEN__
+    MOUSE_ClearAllButtons();
+    g_mouseClickState = MOUSE_IDLE;
+    int32_t mousestatus = 0;
+#else
     int32_t mousestatus = mouseReadAbs(&m_mousepos, &g_mouseAbs);
     if (mousestatus && g_mouseClickState == MOUSE_PRESSED)
         m_mousedownpos = m_mousepos;
+#endif
 
     Menu_RunInput(m_currentMenu);
 
@@ -8268,6 +8292,11 @@ void M_DisplayMenus(void)
             m_mousewake_watchpoint = 1;
 #endif
 
+        
+#ifdef __EMSCRIPTEN__
+        m_prevmousepos = m_mousepos;
+        m_mouselastactivity = timer120();
+#else
         if (MOUSEACTIVECONDITIONAL(mouseAdvanceClickState()) || m_mousepos.x != m_prevmousepos.x || m_mousepos.y != m_prevmousepos.y || g_mouseClickState != MOUSE_IDLE)
         {
             m_prevmousepos = m_mousepos;
@@ -8276,6 +8305,7 @@ void M_DisplayMenus(void)
 #if !defined EDUKE32_TOUCH_DEVICES
         else
             m_mousewake_watchpoint = 0;
+#endif
 #endif
 
         m_mousecaught = 0;

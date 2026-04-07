@@ -102,16 +102,29 @@ int32_t I_EscapeTrigger(void) { return CONTROL_GetUserInput(nullptr)->b_escape; 
 
 int32_t I_MenuUp(void)
 {
+#ifdef __EMSCRIPTEN__
+    return CONTROL_GetUserInput(nullptr)->dir == dir_Up;
+#else
     return CONTROL_GetUserInput(nullptr)->dir == dir_Up || BUTTON(gamefunc_Move_Forward);
+#endif
 }
 
 int32_t I_MenuDown(void)
 {
+#ifdef __EMSCRIPTEN__
+    return CONTROL_GetUserInput(nullptr)->dir == dir_Down;
+#else
     return CONTROL_GetUserInput(nullptr)->dir == dir_Down || BUTTON(gamefunc_Move_Backward);
+#endif
 }
 
+#ifdef __EMSCRIPTEN__
+int32_t I_MenuLeft(void) { return CONTROL_GetUserInput(nullptr)->dir == dir_Left; }
+int32_t I_MenuRight(void) { return CONTROL_GetUserInput(nullptr)->dir == dir_Right; }
+#else
 int32_t I_MenuLeft(void) { return CONTROL_GetUserInput(nullptr)->dir == dir_Left || BUTTON(gamefunc_Turn_Left) || BUTTON(gamefunc_Strafe_Left); }
 int32_t I_MenuRight(void) { return CONTROL_GetUserInput(nullptr)->dir == dir_Right || BUTTON(gamefunc_Turn_Right) || BUTTON(gamefunc_Strafe_Right); }
+#endif
 
 int32_t I_SliderLeft(void) { return I_MenuLeft() || /*MOUSEACTIVECONDITIONAL*/(MOUSE_GetButtons() & M_WHEELDOWN); }
 int32_t I_SliderRight(void) { return I_MenuRight() || /*MOUSEACTIVECONDITIONAL*/(MOUSE_GetButtons() & M_WHEELUP); }

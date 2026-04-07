@@ -23,6 +23,10 @@
 #include "android.h"
 #endif
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 // TODO: add mact cvars and make this user configurable
 #define USERINPUTDELAY 500
 #define USERINPUTFASTDELAY 60
@@ -68,8 +72,16 @@ bool CONTROL_BindsEnabled = 0;
 
 #ifdef __EMSCRIPTEN__
 extern "C" int32_t webGetInjectedButtonsLow(void);
-extern "C" int32_t webConsumeInjectedMouseX(void);
-extern "C" int32_t webConsumeInjectedMouseY(void);
+EM_JS(int32_t, webConsumeInjectedMouseX, (), {
+    const value = globalThis.__edukeInjectedMouseX | 0;
+    globalThis.__edukeInjectedMouseX = 0;
+    return value;
+});
+EM_JS(int32_t, webConsumeInjectedMouseY, (), {
+    const value = globalThis.__edukeInjectedMouseY | 0;
+    globalThis.__edukeInjectedMouseY = 0;
+    return value;
+});
 #endif
 
 #define CONTROL_CheckRange(which) ((unsigned)which >= (unsigned)CONTROL_NUM_FLAGS)
@@ -848,19 +860,39 @@ UserInput *CONTROL_GetUserInput(UserInput *info)
 
     info->dir = (ExtGetTime() >= userInput.clock) ? newdir : dir_None;
 
-    if (KB_KeyDown[sc_kpad_8] || KB_KeyDown[sc_UpArrow])
+    if (KB_KeyDown[sc_kpad_8] || KB_KeyDown[sc_UpArrow]
+#ifdef __EMSCRIPTEN__
+        || KB_KeyDown[sc_W]
+#endif
+    )
         info->dir = dir_Up;
-    else if (KB_KeyDown[sc_kpad_2] || KB_KeyDown[sc_DownArrow])
+    else if (KB_KeyDown[sc_kpad_2] || KB_KeyDown[sc_DownArrow]
+#ifdef __EMSCRIPTEN__
+        || KB_KeyDown[sc_S]
+#endif
+    )
         info->dir = dir_Down;
-    else if (KB_KeyDown[sc_kpad_4] || KB_KeyDown[sc_LeftArrow])
+    else if (KB_KeyDown[sc_kpad_4] || KB_KeyDown[sc_LeftArrow]
+#ifdef __EMSCRIPTEN__
+        || KB_KeyDown[sc_A]
+#endif
+    )
         info->dir = dir_Left;
-    else if (KB_KeyDown[sc_kpad_6] || KB_KeyDown[sc_RightArrow])
+    else if (KB_KeyDown[sc_kpad_6] || KB_KeyDown[sc_RightArrow]
+#ifdef __EMSCRIPTEN__
+        || KB_KeyDown[sc_D]
+#endif
+    )
         info->dir = dir_Right;
 
     info->b_advance = KB_KeyPressed(sc_Enter) || KB_KeyPressed(sc_kpad_Enter) || (MOUSE_GetButtons() & M_LEFTBUTTON)
                     || (JOYSTICK_GetControllerButtons() & (1 << CONTROLLER_BUTTON_A));
     info->b_return   = KB_KeyPressed(sc_Escape) || (MOUSE_GetButtons() & M_RIGHTBUTTON) || (JOYSTICK_GetControllerButtons() & (1 << CONTROLLER_BUTTON_B));
-    info->b_escape = KB_KeyPressed(sc_Escape) || (JOYSTICK_GetControllerButtons() & (1 << CONTROLLER_BUTTON_START));
+    info->b_escape = KB_KeyPressed(sc_Escape)
+#ifdef __EMSCRIPTEN__
+                  || KB_KeyPressed(sc_M)
+#endif
+                  || (JOYSTICK_GetControllerButtons() & (1 << CONTROLLER_BUTTON_START));
 
 #if defined(GEKKO)
     if (JOYSTICK_GetButtons()&(WII_A))
@@ -911,12 +943,16 @@ void CONTROL_ClearUserInput(UserInput * info)
     // for keyboard keys we want the OS repeat rate, so just clear them
     KB_ClearKeyDown(sc_UpArrow);
     KB_ClearKeyDown(sc_kpad_8);
+    KB_ClearKeyDown(sc_W);
     KB_ClearKeyDown(sc_DownArrow);
     KB_ClearKeyDown(sc_kpad_2);
+    KB_ClearKeyDown(sc_S);
     KB_ClearKeyDown(sc_LeftArrow);
     KB_ClearKeyDown(sc_kpad_4);
+    KB_ClearKeyDown(sc_A);
     KB_ClearKeyDown(sc_RightArrow);
     KB_ClearKeyDown(sc_kpad_6);
+    KB_ClearKeyDown(sc_D);
 
     // the OS doesn't handle repeat for joystick inputs so we have to do it ourselves
     if (info->dir != dir_None)
@@ -952,6 +988,9 @@ void CONTROL_ClearUserInput(UserInput * info)
     if (info->b_escape)
     {
         KB_ClearKeyDown(sc_Escape);
+#ifdef __EMSCRIPTEN__
+        KB_ClearKeyDown(sc_M);
+#endif
         userInput.buttonCleared[3] = true;    
     }
     inputchecked = 1;

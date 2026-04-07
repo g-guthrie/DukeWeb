@@ -301,7 +301,7 @@ const char keydefaults[NUMGAMEFUNCTIONS*2][MAXGAMEFUNCLEN] =
    "H", "",
    "J", "",
    "N", "",
-   "M", "",
+   "", "",
    "BakSpc", "",
    "T", "",
    "Tab", "",

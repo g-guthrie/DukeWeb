@@ -507,8 +507,13 @@ extern int32_t m_mousewake_watchpoint, m_menuchange_watchpoint;
 // alpha increments of 3 --> 255 / 3 = 85 --> round up to power of 2 --> 128 --> divide by 2 --> 64 alphatabs required
 // use 16 anyway :P
 # define MOUSEUSEALPHA (videoGetRenderMode() != REND_CLASSIC || numalphatabs >= 15)
-# define MOUSEALPHA (MOUSEUSEALPHA ? clamp(((int32_t) totalclock - m_mouselastactivity - 90)*3, 0, 255) : 0)
-# define CURSORALPHA (MOUSEUSEALPHA ? clamp(((int32_t) totalclock - m_mouselastactivity - 90)*2 + (255/3), (255/3), 255) : 255/3)
+# ifdef __EMSCRIPTEN__
+#  define MOUSEALPHA 255
+#  define CURSORALPHA 255
+# else
+#  define MOUSEALPHA (MOUSEUSEALPHA ? clamp(((int32_t) totalclock - m_mouselastactivity - 90)*3, 0, 255) : 0)
+#  define CURSORALPHA (MOUSEUSEALPHA ? clamp(((int32_t) totalclock - m_mouselastactivity - 90)*2 + (255/3), (255/3), 255) : 255/3)
+# endif
 # define MOUSEACTIVECONDITION (totalclock - m_mouselastactivity < M_MOUSETIMEOUT)
 # define MOUSEACTIVECONDITIONAL(condition) (MOUSEACTIVECONDITION && (condition))
 # define MOUSEINACTIVECONDITIONAL(condition) ((((g_player[myconnectindex].ps->gm & (MODE_MENU)) != MODE_MENU) || !MOUSEACTIVECONDITION) && (condition))

@@ -1555,58 +1555,9 @@ ACTOR_STATIC void G_MovePlayers(void)
                 if (hasActor)
                     A_Execute(spriteNum, P_GetP(pSprite), otherPlayerDist);
 
-#ifdef __EMSCRIPTEN__
-                // Keep the browser path lean, but still run the real player actor
-                // logic so combat and damage resolve through the engine.
                 if (pPlayer->newowner < 0)
                 {
-                    pPlayer->q16angvel = 0;
-                    pPlayer->oq16ang = pPlayer->q16ang;
-                    pPlayer->oq16horiz = pPlayer->q16horiz;
-                    pPlayer->oq16horizoff = pPlayer->q16horizoff;
-                }
-
-                if (ud.god)
-                {
-                    pSprite->extra = pPlayer->max_player_health;
-                    pSprite->cstat = 257;
-                    if (!WW2GI)
-                        pPlayer->inv_amount[GET_JETPACK] = 1599;
-                }
-
-#ifndef EDUKE32_STANDALONE
-                if (!FURY && pSprite->extra > 0)
-                {
-                    actor[spriteNum].htowner = spriteNum;
-
-                    if (ud.god == 0)
-                        if (G_CheckForSpaceCeiling(pSprite->sectnum) || G_CheckForSpaceFloor(pSprite->sectnum))
-                        {
-                            LOG_F(WARNING, "%s: player killed by space sector!", EDUKE32_FUNCTION);
-                            P_QuickKill(pPlayer);
-                        }
-                }
-#endif
-
-                if (pSprite->extra <= 0)
-                {
-                    pPlayer->pos.x = pSprite->x;
-                    pPlayer->pos.y = pSprite->y;
-                    pPlayer->pos.z = pSprite->z-(20<<8);
-                    pPlayer->newowner = -1;
-                }
-
-                pSprite->ang = fix16_to_int(pPlayer->q16ang);
-                goto next_sprite;
-#endif
-
-                if (pPlayer->newowner < 0)
-                {
-#ifdef __EMSCRIPTEN__
-                    pPlayer->q16angvel    = 0;
-#else
                     pPlayer->q16angvel    = P_GetQ16AngleDeltaForTic(pPlayer);
-#endif
                     pPlayer->oq16ang      = pPlayer->q16ang;
                     pPlayer->oq16horiz    = pPlayer->q16horiz;
                     pPlayer->oq16horizoff = pPlayer->q16horizoff;

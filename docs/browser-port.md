@@ -79,3 +79,24 @@ This means the next engineering step is not art/UI tuning. It is build-system su
 4. Swap or shim the SDL/video/input/audio layer for browser-compatible equivalents.
 
 Only after that do we get a meaningful "real Duke in browser" build artifact.
+
+## Browser Input Policy
+
+The browser runtime intentionally uses two input models only:
+
+- gameplay: relative mouse + keyboard/game buttons
+- menus: directional keyboard/gamepad-style navigation
+
+It does **not** support a separate browser-only menu mouse cursor path.
+
+That policy is intentional:
+
+- the current menu behavior already works well
+- a separate browser menu mouse path creates an extra input mode to debug
+- removing that path reduces browser-only failure cases
+
+When editing browser input code, preserve this rule:
+
+- keep gameplay mouse support
+- keep menus directional-only
+- do not reintroduce a menu hover/click cursor path unless there is a strong reason and dedicated regression coverage

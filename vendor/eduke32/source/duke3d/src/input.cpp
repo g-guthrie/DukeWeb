@@ -103,6 +103,9 @@ int32_t I_EscapeTrigger(void) { return CONTROL_GetUserInput(nullptr)->b_escape; 
 int32_t I_MenuUp(void)
 {
 #ifdef __EMSCRIPTEN__
+    // Browser menus are intentionally directional-only. We do not expose a
+    // separate browser mouse cursor/menu hover path, because that adds a whole
+    // extra mode of failure without improving the current feel.
     return CONTROL_GetUserInput(nullptr)->dir == dir_Up;
 #else
     return CONTROL_GetUserInput(nullptr)->dir == dir_Up || BUTTON(gamefunc_Move_Forward);

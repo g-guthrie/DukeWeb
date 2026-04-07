@@ -73,12 +73,18 @@ bool CONTROL_BindsEnabled = 0;
 #ifdef __EMSCRIPTEN__
 extern "C" int32_t webGetInjectedButtonsLow(void);
 EM_JS(int32_t, webConsumeInjectedMouseX, (), {
-    const value = globalThis.__edukeInjectedMouseX | 0;
+    const state = globalThis.__edukeInput;
+    const value = state ? (state.injectedMouseX | 0) : (globalThis.__edukeInjectedMouseX | 0);
+    if (state)
+        state.injectedMouseX = 0;
     globalThis.__edukeInjectedMouseX = 0;
     return value;
 });
 EM_JS(int32_t, webConsumeInjectedMouseY, (), {
-    const value = globalThis.__edukeInjectedMouseY | 0;
+    const state = globalThis.__edukeInput;
+    const value = state ? (state.injectedMouseY | 0) : (globalThis.__edukeInjectedMouseY | 0);
+    if (state)
+        state.injectedMouseY = 0;
     globalThis.__edukeInjectedMouseY = 0;
     return value;
 });

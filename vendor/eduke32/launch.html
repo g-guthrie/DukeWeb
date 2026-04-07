@@ -71,26 +71,17 @@
         position: fixed;
         top: 16px;
         left: 16px;
-        right: 16px;
         z-index: 2;
-        display: flex;
-        justify-content: space-between;
-        gap: 16px;
-        align-items: flex-start;
         pointer-events: none;
       }
 
-      #status-panel,
-      #controls {
+      #status-panel {
         pointer-events: auto;
         background: var(--panel);
         border: 1px solid var(--panel-border);
         border-radius: 14px;
         padding: 10px 12px;
         backdrop-filter: blur(8px);
-      }
-
-      #status-panel {
         min-width: min(420px, 55vw);
       }
 
@@ -111,53 +102,32 @@
         margin-top: 8px;
       }
 
-      #controls {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        font-size: 14px;
-      }
-
-      #test-controls {
+      #fullscreen-button {
         position: fixed;
+        top: 16px;
         right: 16px;
-        bottom: 16px;
         z-index: 3;
-        display: flex;
-        gap: 8px;
         pointer-events: auto;
-      }
-
-      .test-pad {
-        width: 84px;
-        height: 42px;
         border: 1px solid rgba(241, 162, 85, 0.35);
-        border-radius: 10px;
+        border-radius: 999px;
         background: rgba(12, 16, 24, 0.82);
         color: var(--ink);
-        font: 12px/1 Georgia, serif;
-        letter-spacing: 0.06em;
+        font: 11px/1 Georgia, serif;
+        letter-spacing: 0.12em;
         text-transform: uppercase;
-        user-select: none;
-        touch-action: none;
-        display: grid;
-        place-items: center;
-      }
-
-      #controls label {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-      }
-
-      #controls button {
-        border: 1px solid var(--panel-border);
-        border-radius: 10px;
-        background: rgba(255, 255, 255, 0.08);
-        color: var(--ink);
-        padding: 8px 10px;
-        font: inherit;
+        padding: 10px 12px;
+        min-width: 0;
         cursor: pointer;
+        backdrop-filter: blur(8px);
+      }
+
+      #fullscreen-button:hover {
+        background: rgba(24, 31, 45, 0.92);
+      }
+
+      #fullscreen-button:focus-visible {
+        outline: 2px solid rgba(241, 162, 85, 0.9);
+        outline-offset: 2px;
       }
 
       #output {
@@ -189,27 +159,20 @@
         display: none;
       }
 
-      body[data-ready="true"] #controls {
-        opacity: 0.82;
-      }
-
       @media (max-width: 900px) {
         #hud {
           top: 10px;
           left: 10px;
-          right: 10px;
-          flex-direction: column;
         }
 
         #status-panel {
           min-width: 0;
-          width: 100%;
         }
 
-        #controls {
-          width: 100%;
-          justify-content: space-between;
-          flex-wrap: wrap;
+        #fullscreen-button {
+          top: 10px;
+          right: 10px;
+          padding: 8px 10px;
         }
       }
     </style>
@@ -222,33 +185,25 @@
           <div id="status">Booting...</div>
           <progress id="progress" hidden max="100" value="0"></progress>
         </div>
-        <div id="controls">
-          <label><input type="checkbox" id="resize" /> Resize canvas</label>
-          <label><input type="checkbox" id="pointerLock" checked /> Lock pointer</label>
-          <button id="fullscreen-btn" type="button">Fullscreen</button>
-        </div>
       </div>
 
       <div id="canvas-wrap">
         <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="0"></canvas>
       </div>
+      <button id="fullscreen-button" type="button" aria-label="Toggle fullscreen">Full</button>
 
       <textarea id="output" rows="8" aria-label="Runtime log"></textarea>
-      <div id="test-controls" aria-hidden="true">
-        <div class="test-pad" data-gamefunc="0">Forward</div>
-        <div class="test-pad" data-gamefunc="3">Turn</div>
-        <div class="test-pad" data-gamefunc="5">Fire</div>
-      </div>
     </div>
 
     <script>
       const statusElement = document.getElementById("status");
       const progressElement = document.getElementById("progress");
       const canvasElement = document.getElementById("canvas");
+      const canvasWrapElement = document.getElementById("canvas-wrap");
+      const fullscreenButton = document.getElementById("fullscreen-button");
       const outputElement = document.getElementById("output");
-      const fullscreenButton = document.getElementById("fullscreen-btn");
-      const pointerLockElement = document.getElementById("pointerLock");
       let allowBrowserFullscreen = false;
+      const browserOptions = { pointerLock: true };
 
       const blockImplicitFullscreenRequests = () => {
         const fullscreenApis = [
@@ -267,7 +222,6 @@
 
           const wrapped = function (...args) {
             if (!allowBrowserFullscreen) {
-              console.log("EDUKE_FULLSCREEN_BLOCKED", methodName);
               return Promise.reject?.(new DOMException("Implicit fullscreen blocked", "NotAllowedError"));
             }
             return original.apply(this, args);
@@ -279,6 +233,7 @@
       };
 
       blockImplicitFullscreenRequests();
+
       const params = new URLSearchParams(window.location.search);
       const autotestEnabled = params.get("autotest") === "1";
       window.__edukeAutotestConfig = {
@@ -286,7 +241,7 @@
         start: performance.now(),
         sampleCounter: 0,
       };
-      const testControlElements = Array.from(document.querySelectorAll("[data-gamefunc]"));
+
       const GAMEFUNCS = Object.freeze({
         moveForward: 0,
         moveBackward: 1,
@@ -302,9 +257,41 @@
         strafeRight: 16,
       });
 
-      window.__edukeInjectedButtonsLow = 0;
-      window.__edukeInjectedMouseX = 0;
-      window.__edukeInjectedMouseY = 0;
+      const inputState = Object.assign(window.__edukeInput || {}, {
+        injectedButtonsLow: 0,
+        injectedMouseX: 0,
+        injectedMouseY: 0,
+        injectedButtonsObserved: 0,
+      });
+      window.__edukeInput = inputState;
+
+      const syncLegacyInputGlobals = () => {
+        window.__edukeInjectedButtonsLow = inputState.injectedButtonsLow;
+        window.__edukeInjectedMouseX = inputState.injectedMouseX;
+        window.__edukeInjectedMouseY = inputState.injectedMouseY;
+        window.__edukeInjectedButtonsObserved = inputState.injectedButtonsObserved;
+      };
+
+      const setInjectedButtonsLow = (value) => {
+        inputState.injectedButtonsLow = value | 0;
+        window.__edukeInjectedButtonsLow = inputState.injectedButtonsLow;
+      };
+
+      const addInjectedMouseDelta = (dx, dy) => {
+        inputState.injectedMouseX += dx | 0;
+        inputState.injectedMouseY += dy | 0;
+        window.__edukeInjectedMouseX = inputState.injectedMouseX;
+        window.__edukeInjectedMouseY = inputState.injectedMouseY;
+      };
+
+      const clearInjectedMouseDelta = () => {
+        inputState.injectedMouseX = 0;
+        inputState.injectedMouseY = 0;
+        window.__edukeInjectedMouseX = 0;
+        window.__edukeInjectedMouseY = 0;
+      };
+
+      syncLegacyInputGlobals();
 
       const buttonSources = new Map();
 
@@ -315,7 +302,7 @@
             mask |= 1 << button;
           }
         }
-        window.__edukeInjectedButtonsLow = mask;
+        setInjectedButtonsLow(mask);
       };
 
       const setInjectedButton = (button, active, source = `api:${button}`) => {
@@ -339,9 +326,8 @@
 
       const clearInjectedInput = () => {
         buttonSources.clear();
-        window.__edukeInjectedButtonsLow = 0;
-        window.__edukeInjectedMouseX = 0;
-        window.__edukeInjectedMouseY = 0;
+        setInjectedButtonsLow(0);
+        clearInjectedMouseDelta();
       };
 
       window.__edukeSetInjectedButton = setInjectedButton;
@@ -350,6 +336,7 @@
         clearInjectedInput();
         window.__edukeSequenceSamples = [];
         let lastSampleAt = -Infinity;
+
         const sample = (now) => {
           const state = window.__edukeState || {};
           const entry = {
@@ -367,6 +354,7 @@
           }
           console.log("EDUKE_SAMPLE", JSON.stringify(entry));
         };
+
         const maxEnd = actions.reduce((acc, action) => Math.max(acc, action.start + action.duration), 0);
         const start = performance.now();
 
@@ -402,8 +390,7 @@
           return;
         }
         window.__edukeAutotestStarted = true;
-        console.log("EDUKE_AUTOTEST_ARMED");
-        pointerLockElement.checked = false;
+        browserOptions.pointerLock = false;
         clearInjectedInput();
 
         const waitForState = () => {
@@ -413,12 +400,8 @@
             return;
           }
 
-          console.log("EDUKE_AUTOTEST_BEGIN");
           window.__edukeAutotestConfig.start = performance.now();
           window.__edukeAutotestConfig.sampleCounter = 0;
-          window.__edukeAutotestConfig.firstState = null;
-          window.__edukeAutotestConfig.lastState = null;
-          window.__edukeAutotestConfig.resultLogged = false;
 
           window.__edukeRunActionSequence(
             [
@@ -445,18 +428,15 @@
             const turnedEnough = Math.abs(rawAng) > 8;
             const firedEnough = (last.ammo || 0) < (first.ammo || 0) || (last.kickback || 0) > (first.kickback || 0);
 
-            const result = {
-              first,
-              last,
-              sampleCount: samples.length,
-              assertions: {
-                movedEnough,
-                turnedEnough,
-                firedEnough,
-              },
-            };
-
-            console.log("EDUKE_AUTOTEST_RESULT", JSON.stringify(result));
+            console.log(
+              "EDUKE_AUTOTEST_RESULT",
+              JSON.stringify({
+                first,
+                last,
+                sampleCount: samples.length,
+                assertions: { movedEnough, turnedEnough, firedEnough },
+              }),
+            );
             document.body.dataset.autotest = movedEnough && turnedEnough && firedEnough ? "pass" : "fail";
           };
 
@@ -501,7 +481,7 @@
 
       const requestPointerLockIfEnabled = () => {
         if (
-          pointerLockElement.checked &&
+          browserOptions.pointerLock &&
           !isMenuActive() &&
           document.pointerLockElement !== canvasElement &&
           typeof canvasElement.requestPointerLock === "function"
@@ -522,14 +502,10 @@
         syncMouseButtons(0);
       };
 
-      canvasElement.addEventListener(
-        "webglcontextlost",
-        (event) => {
-          event.preventDefault();
-          alert("WebGL context lost. Reload the page.");
-        },
-        false,
-      );
+      canvasElement.addEventListener("webglcontextlost", (event) => {
+        event.preventDefault();
+        alert("WebGL context lost. Reload the page.");
+      });
 
       canvasElement.addEventListener("pointerdown", () => {
         focusCanvas();
@@ -541,7 +517,7 @@
             focusCanvas();
             return;
           }
-          if (pointerLockElement.checked && document.pointerLockElement !== canvasElement) {
+          if (browserOptions.pointerLock && document.pointerLockElement !== canvasElement) {
             focusCanvas();
             requestPointerLockIfEnabled();
             event.preventDefault();
@@ -570,8 +546,7 @@
 
       canvasElement.addEventListener("mouseleave", () => {
         if (document.pointerLockElement !== canvasElement) {
-          window.__edukeInjectedMouseX = 0;
-          window.__edukeInjectedMouseY = 0;
+          clearInjectedMouseDelta();
         }
       });
 
@@ -621,12 +596,12 @@
         clearInjectedInput();
         resyncCanvasPresentation();
         focusCanvas();
+        if (document.fullscreenElement === canvasWrapElement) {
+          requestPointerLockIfEnabled();
+        }
       });
 
       window.addEventListener("mouseup", () => {
-        for (const element of testControlElements) {
-          setInjectedButton(Number(element.dataset.gamefunc), false, `pad:${element.dataset.gamefunc}`);
-        }
         clearMouseButtons();
       });
 
@@ -649,30 +624,10 @@
 
       canvasElement.addEventListener("mousemove", (event) => {
         if (document.activeElement === canvasElement || document.pointerLockElement === canvasElement) {
-          window.__edukeInjectedMouseX += event.movementX || 0;
-          window.__edukeInjectedMouseY += event.movementY || 0;
+          addInjectedMouseDelta(event.movementX || 0, event.movementY || 0);
           syncMouseButtons(event.buttons);
         }
       });
-
-      for (const element of testControlElements) {
-        const gamefunc = Number(element.dataset.gamefunc);
-
-        element.addEventListener("mousedown", (event) => {
-          setInjectedButton(gamefunc, true, `pad:${gamefunc}`);
-          focusCanvas();
-          event.preventDefault();
-        });
-
-        element.addEventListener("mouseup", (event) => {
-          setInjectedButton(gamefunc, false, `pad:${gamefunc}`);
-          event.preventDefault();
-        });
-
-        element.addEventListener("mouseleave", () => {
-          setInjectedButton(gamefunc, false, `pad:${gamefunc}`);
-        });
-      }
 
       window.addEventListener("keydown", () => {
         if (document.activeElement !== canvasElement) {
@@ -724,19 +679,40 @@
       titleObserver.observe(document.querySelector("title"), { childList: true });
       setInterval(markReadyIfRunning, 250);
 
-      fullscreenButton.addEventListener("click", () => {
+      const toggleBrowserFullscreen = async () => {
         focusCanvas();
         allowBrowserFullscreen = true;
         try {
-          Module.requestFullscreen(
-            pointerLockElement.checked,
-            document.getElementById("resize").checked,
-          );
+          if (document.fullscreenElement) {
+            await document.exitFullscreen?.();
+            return;
+          }
+
+          const request =
+            canvasWrapElement.requestFullscreen?.bind(canvasWrapElement) ||
+            canvasWrapElement.webkitRequestFullscreen?.bind(canvasWrapElement) ||
+            canvasWrapElement.webkitRequestFullScreen?.bind(canvasWrapElement) ||
+            canvasWrapElement.mozRequestFullScreen?.bind(canvasWrapElement) ||
+            canvasWrapElement.msRequestFullscreen?.bind(canvasWrapElement);
+
+          if (!request) {
+            return;
+          }
+
+          const result = request();
+          if (result && typeof result.catch === "function") {
+            await result.catch(() => {});
+          }
         } finally {
           setTimeout(() => {
             allowBrowserFullscreen = false;
           }, 0);
         }
+      };
+
+      fullscreenButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        void toggleBrowserFullscreen();
       });
 
       window.addEventListener("resize", () => {

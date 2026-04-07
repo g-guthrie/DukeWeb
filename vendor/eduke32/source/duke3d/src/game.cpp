@@ -396,18 +396,6 @@ static void dukeDrawFrameOnce(void)
 {
     MICROPROFILE_SCOPEI("Game", EDUKE32_FUNCTION, MP_YELLOWGREEN);
 
-#ifdef __EMSCRIPTEN__
-    static int loggedFrameState = 0;
-    if (loggedFrameState < 3)
-    {
-        LOG_F(INFO, "web frame draw #%d gm=0x%x currentMenu=%d totalclock=%d ototalclock=%d",
-              loggedFrameState + 1, g_player[myconnectindex].ps->gm, g_currentMenu, (int32_t)totalclock, (int32_t)ototalclock);
-        if (loggedFrameState == 0)
-            G_UpdateAppTitle(in3dmode() ? "WEB FRAME 3D" : "WEB FRAME 2D");
-        loggedFrameState++;
-    }
-#endif
-
     g_lastFrameStartTime = timerGetNanoTicks();
 
     if (!g_saveRequested)
@@ -431,48 +419,12 @@ static void dukeDrawFrameOnce(void)
     webPublishDrawProgress(30, myconnectindex);
 #endif
 
-#ifdef __EMSCRIPTEN__
-    static int markedPostRooms = 0;
-    if (!markedPostRooms)
-    {
-        int nonzero = 0;
-        if (frameplace)
-        {
-            auto const *buf = reinterpret_cast<uint8_t const *>(frameplace);
-            int const sampleCount = min<int32_t>(xdim * ydim, 4096);
-            for (int i = 0; i < sampleCount; ++i)
-                nonzero += buf[i] != 0;
-        }
-        LOG_F(INFO, "web postrooms source nonzero=%d", nonzero);
-        G_UpdateAppTitle(nonzero ? "WEB POSTROOM NZ" : "WEB POSTROOM ZERO");
-        markedPostRooms = 1;
-    }
-#endif
-
     if (videoGetRenderMode() >= REND_POLYMOST)
         G_DrawBackground();
-
-#ifdef __EMSCRIPTEN__
-    static int markedDisplayRest = 0;
-    if (!markedDisplayRest)
-    {
-        G_UpdateAppTitle("WEB DISPLAYREST");
-        markedDisplayRest = 1;
-    }
-#endif
     G_DisplayRest(smoothratio);
 
 #ifdef __EMSCRIPTEN__
     webPublishDrawProgress(31, myconnectindex);
-#endif
-
-#ifdef __EMSCRIPTEN__
-    static int markedPostDisplayRest = 0;
-    if (!markedPostDisplayRest)
-    {
-        G_UpdateAppTitle("WEB POSTDISPLAY");
-        markedPostDisplayRest = 1;
-    }
 #endif
 
 #if MICROPROFILE_ENABLED != 0
@@ -493,42 +445,11 @@ static void dukeDrawFrameOnce(void)
     webPublishDrawProgress(32, myconnectindex);
 #endif
 
-#ifdef __EMSCRIPTEN__
-    static int markedNextPage = 0;
-    if (!markedNextPage)
-    {
-        G_UpdateAppTitle(in3dmode() ? "WEB NEXTPAGE 3D" : "WEB NEXTPAGE 2D");
-        markedNextPage = 1;
-    }
-#endif
-    #ifdef __EMSCRIPTEN__
-    videoShowFrame(0);
-    webPublishDrawProgress(33, myconnectindex);
-    static int markedPostDirectShow = 0;
-    if (!markedPostDirectShow)
-    {
-        markedPostDirectShow = 1;
-    }
-    faketimerhandler();
-    g_cache.ageBlocks();
-    #else
     videoNextPage();
-    #endif
 #ifdef __EMSCRIPTEN__
-    static int markedSoundUpdate = 0;
-    if (!markedSoundUpdate)
-    {
-        markedSoundUpdate = 1;
-    }
+    webPublishDrawProgress(33, myconnectindex);
 #endif
     S_Update();
-#ifdef __EMSCRIPTEN__
-    static int markedFrameEnd = 0;
-    if (markedFrameEnd < 3)
-    {
-        markedFrameEnd++;
-    }
-#endif
     g_lastFrameEndTime2 = timerGetNanoTicks();
     g_lastFrameDuration2 = g_lastFrameEndTime2 - g_lastFrameStartTime;
 }
@@ -7318,41 +7239,27 @@ MAIN_LOOP_RESTART:
             }
             else if (g_networkMode != NET_DEDICATED_SERVER)
             {
-#ifdef __EMSCRIPTEN__
-                LOG_F(INFO, "web entering G_DisplayLogo gm=0x%x currentMenu=%d", g_player[myconnectindex].ps->gm, g_currentMenu);
-#endif
                 G_DisplayLogo();
-#ifdef __EMSCRIPTEN__
-                LOG_F(INFO, "web returned G_DisplayLogo gm=0x%x currentMenu=%d", g_player[myconnectindex].ps->gm, g_currentMenu);
-#endif
             }
 
             if (g_networkMode != NET_DEDICATED_SERVER)
             {
 #ifdef __EMSCRIPTEN__
-                LOG_F(INFO, "web before G_PlaybackDemo gm=0x%x currentMenu=%d", g_player[myconnectindex].ps->gm, g_currentMenu);
-                LOG_F(INFO, "web skipping G_PlaybackDemo");
                 bool playedDemo = false;
 #else
                 bool playedDemo = G_PlaybackDemo();
 #endif
                 if (playedDemo)
                 {
-#ifdef __EMSCRIPTEN__
-                    LOG_F(INFO, "web G_PlaybackDemo returned true");
-#endif
                     FX_StopAllSounds();
                     g_noLogoAnim = 1;
                     goto MAIN_LOOP_RESTART;
                 }
 #ifdef __EMSCRIPTEN__
-                LOG_F(INFO, "web G_PlaybackDemo returned false");
                 static int webStartedLevel = 0;
                 if (!webStartedLevel)
                 {
                     webStartedLevel = 1;
-                    LOG_F(INFO, "web auto-starting level");
-                    G_UpdateAppTitle("WEB AUTOSTART");
                     ud.m_volume_number = 0;
                     ud.m_level_number = 0;
                     if (ud.m_player_skill < 1)
@@ -7389,15 +7296,6 @@ MAIN_LOOP_RESTART:
 
     do //main loop
     {
-#ifdef __EMSCRIPTEN__
-        static int loggedMainLoop = 0;
-        if (loggedMainLoop < 3)
-        {
-            LOG_F(INFO, "web main loop #%d gm=0x%x currentMenu=%d totalclock=%d ototalclock=%d",
-                  loggedMainLoop + 1, myplayer.gm, g_currentMenu, (int32_t)totalclock, (int32_t)ototalclock);
-            loggedMainLoop++;
-        }
-#endif
         if (gameHandleEvents() && quitevent)
         {
             KB_KeyDown[sc_Escape] = 1;
@@ -7438,15 +7336,6 @@ MAIN_LOOP_RESTART:
                     {
                         Net_GetPackets();
                         G_DoMoveThings();
-#ifdef __EMSCRIPTEN__
-                        static int loggedAfterMoveThings = 0;
-                        if (loggedAfterMoveThings < 12)
-                        {
-                            LOG_F(INFO, "web main loop after G_DoMoveThings #%d totalclock=%d ototalclock=%d frameJustDrawn=%d ready2send=%d",
-                                  loggedAfterMoveThings + 1, (int32_t)totalclock, (int32_t)ototalclock, (int)g_frameJustDrawn, ready2send);
-                            loggedAfterMoveThings++;
-                        }
-#endif
                     }
 
                 }
@@ -7469,27 +7358,7 @@ MAIN_LOOP_RESTART:
                 g_gameUpdateAndDrawTime = g_gameUpdateTime + (double)g_lastFrameDuration * 1000.0 / (double)timerGetNanoTickRate();
         }
 
-#ifdef __EMSCRIPTEN__
-        static int loggedAfterGameUpdate = 0;
-        if (loggedAfterGameUpdate < 12)
-        {
-            LOG_F(INFO, "web after gameUpdate #%d totalclock=%d ototalclock=%d gameUpdate=%d frameJustDrawn=%d",
-                  loggedAfterGameUpdate + 1, (int32_t)totalclock, (int32_t)ototalclock, (int)gameUpdate, (int)g_frameJustDrawn);
-            loggedAfterGameUpdate++;
-        }
-#endif
-
         G_DoCheats();
-
-#ifdef __EMSCRIPTEN__
-        static int loggedAfterCheats = 0;
-        if (loggedAfterCheats < 12)
-        {
-            LOG_F(INFO, "web after G_DoCheats #%d totalclock=%d ototalclock=%d gm=0x%x",
-                  loggedAfterCheats + 1, (int32_t)totalclock, (int32_t)ototalclock, myplayer.gm);
-            loggedAfterCheats++;
-        }
-#endif
 
         if (myplayer.gm & MODE_NEWGAME)
             goto MAIN_LOOP_RESTART;
@@ -7511,17 +7380,6 @@ MAIN_LOOP_RESTART:
         {
             int const fpsReady = engineFPSLimit((myplayer.gm & MODE_MENU) == MODE_MENU);
 
-#ifdef __EMSCRIPTEN__
-            static int loggedFpsGate = 0;
-            if (loggedFpsGate < 20)
-            {
-                LOG_F(INFO, "web fps gate #%d ready=%d save=%d totalclock=%d ototalclock=%d frameJustDrawn=%d frameDelay=%llu",
-                      loggedFpsGate + 1, fpsReady, (int)g_saveRequested, (int32_t)totalclock, (int32_t)ototalclock,
-                      (int)g_frameJustDrawn, (unsigned long long)g_frameDelay);
-                loggedFpsGate++;
-            }
-#endif
-
             if (fpsReady || g_saveRequested)
             {
                 if (!g_saveRequested)
@@ -7533,28 +7391,7 @@ MAIN_LOOP_RESTART:
 #endif
                 }
 
-#ifdef __EMSCRIPTEN__
-                static int loggedBeforeSwitchRoutine = 0;
-                if (loggedBeforeSwitchRoutine < 12)
-                {
-                    LOG_F(INFO, "web before g_switchRoutine #%d totalclock=%d ototalclock=%d frameJustDrawn=%d save=%d",
-                          loggedBeforeSwitchRoutine + 1, (int32_t)totalclock, (int32_t)ototalclock, (int)g_frameJustDrawn, (int)g_saveRequested);
-                }
-#endif
-
                 g_switchRoutine(co_drawframe);
-
-#ifdef __EMSCRIPTEN__
-                static int loggedAfterSwitchRoutine = 0;
-                if (loggedAfterSwitchRoutine < 12)
-                {
-                    LOG_F(INFO, "web after g_switchRoutine #%d totalclock=%d ototalclock=%d frameJustDrawn=%d frameCounter=%d",
-                          loggedAfterSwitchRoutine + 1, (int32_t)totalclock, (int32_t)ototalclock, (int)g_frameJustDrawn, (int)g_frameCounter);
-                    loggedAfterSwitchRoutine++;
-                }
-                if (loggedBeforeSwitchRoutine < 12)
-                    loggedBeforeSwitchRoutine++;
-#endif
             }
         }
 
@@ -7586,15 +7423,6 @@ int G_DoMoveThings(void)
 {
     ud.camerasprite = -1;
     lockclock += TICSPERFRAME;
-
-#ifdef __EMSCRIPTEN__
-    static int loggedMoveThingsPhase0 = 0;
-    if (loggedMoveThingsPhase0 < 12)
-    {
-        LOG_F(INFO, "web G_DoMoveThings start #%d", loggedMoveThingsPhase0 + 1);
-        loggedMoveThingsPhase0++;
-    }
-#endif
 
     // Moved lower so it is restored correctly by demo diffs:
     //if (g_earthquakeTime > 0) g_earthquakeTime--;
@@ -7738,27 +7566,8 @@ int G_DoMoveThings(void)
 
     if ((everyothertime&1) == 0)
     {
-#ifdef __EMSCRIPTEN__
-        static int loggedAnimateBranch = 0;
-        if (loggedAnimateBranch < 8)
-        {
-            LOG_F(INFO, "web animate branch #%d everyothertime=%d animWalls=%d cyclers=%d",
-                  loggedAnimateBranch + 1, everyothertime, g_animWallCnt, g_cyclerCnt);
-        }
-#endif
         G_AnimateWalls();
-#ifdef __EMSCRIPTEN__
-        if (loggedAnimateBranch < 8)
-            LOG_F(INFO, "web animate branch after G_AnimateWalls #%d", loggedAnimateBranch + 1);
-#endif
         A_MoveCyclers();
-#ifdef __EMSCRIPTEN__
-        if (loggedAnimateBranch < 8)
-        {
-            LOG_F(INFO, "web animate branch after A_MoveCyclers #%d", loggedAnimateBranch + 1);
-            loggedAnimateBranch++;
-        }
-#endif
 
         if ((everyothertime % 10) == 0)
         {
@@ -7775,16 +7584,6 @@ int G_DoMoveThings(void)
 
     if (g_netClient)   //Slave
         Net_SendClientUpdate();
-
-#ifdef __EMSCRIPTEN__
-    static int loggedMoveThingsReturn = 0;
-    if (loggedMoveThingsReturn < 12)
-    {
-        LOG_F(INFO, "web G_DoMoveThings return #%d totalclock=%d ototalclock=%d lockclock=%d everyothertime=%d",
-              loggedMoveThingsReturn + 1, (int32_t)totalclock, (int32_t)ototalclock, (int32_t)lockclock, everyothertime);
-        loggedMoveThingsReturn++;
-    }
-#endif
 
     return 0;
 }

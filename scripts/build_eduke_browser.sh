@@ -26,3 +26,31 @@ make_args=(
 )
 
 make "${make_args[@]}"
+
+cat > "$ROOT/vendor/eduke32/eduke32-web.html" <<'EOF'
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="refresh" content="0; url=./launch.html" />
+    <title>Redirecting...</title>
+  </head>
+  <body>
+    <p>Redirecting to <a href="./launch.html">launch.html</a>...</p>
+  </body>
+</html>
+EOF
+
+cat > "$ROOT/vendor/eduke32/eduke32.html" <<'EOF'
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="refresh" content="0; url=./launch.html" />
+    <title>Redirecting...</title>
+  </head>
+  <body>
+    <p>Redirecting to <a href="./launch.html">launch.html</a>...</p>
+  </body>
+</html>
+EOF

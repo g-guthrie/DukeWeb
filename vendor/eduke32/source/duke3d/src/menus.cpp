@@ -8133,6 +8133,9 @@ void M_DisplayMenus(void)
         Menu_AnimateChange(MENU_QUIT, MA_Advance);
 
 #ifdef __EMSCRIPTEN__
+    // Browser menus deliberately ignore mouse hover/click state and stay on the
+    // directional input path. This keeps one input model for menus instead of
+    // maintaining a separate browser-only cursor mode.
     MOUSE_ClearAllButtons();
     g_mouseClickState = MOUSE_IDLE;
     int32_t mousestatus = 0;

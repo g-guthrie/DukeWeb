@@ -513,6 +513,15 @@
         }
       };
 
+      const syncMouseButtons = (buttons = 0) => {
+        setInjectedButton(GAMEFUNCS.fire, (buttons & 1) !== 0, "mouse:0");
+        setInjectedButton(GAMEFUNCS.open, (buttons & 2) !== 0, "mouse:2");
+      };
+
+      const clearMouseButtons = () => {
+        syncMouseButtons(0);
+      };
+
       canvasElement.addEventListener(
         "webglcontextlost",
         (event) => {
@@ -538,10 +547,10 @@
             event.preventDefault();
             return;
           }
-          setInjectedButton(GAMEFUNCS.fire, true, "mouse:0");
+          syncMouseButtons(event.buttons);
           event.preventDefault();
         } else if (event.button === 2) {
-          setInjectedButton(GAMEFUNCS.open, true, "mouse:2");
+          syncMouseButtons(event.buttons);
           event.preventDefault();
         }
       });
@@ -551,10 +560,10 @@
           if (isMenuActive()) {
             return;
           }
-          setInjectedButton(GAMEFUNCS.fire, false, "mouse:0");
+          syncMouseButtons(event.buttons);
           event.preventDefault();
         } else if (event.button === 2) {
-          setInjectedButton(GAMEFUNCS.open, false, "mouse:2");
+          syncMouseButtons(event.buttons);
           event.preventDefault();
         }
       });
@@ -584,6 +593,22 @@
         clearInjectedInput();
       });
 
+      window.addEventListener("pointerup", (event) => {
+        syncMouseButtons(event.buttons);
+      });
+
+      window.addEventListener("pointercancel", () => {
+        clearMouseButtons();
+      });
+
+      window.addEventListener("dragend", () => {
+        clearMouseButtons();
+      });
+
+      window.addEventListener("contextmenu", () => {
+        clearMouseButtons();
+      });
+
       document.addEventListener("pointerlockchange", () => {
         if (document.pointerLockElement !== canvasElement) {
           clearInjectedInput();
@@ -602,8 +627,7 @@
         for (const element of testControlElements) {
           setInjectedButton(Number(element.dataset.gamefunc), false, `pad:${element.dataset.gamefunc}`);
         }
-        setInjectedButton(GAMEFUNCS.fire, false, "mouse:0");
-        setInjectedButton(GAMEFUNCS.open, false, "mouse:2");
+        clearMouseButtons();
       });
 
       window.addEventListener("keydown", (event) => {
@@ -627,6 +651,7 @@
         if (document.activeElement === canvasElement || document.pointerLockElement === canvasElement) {
           window.__edukeInjectedMouseX += event.movementX || 0;
           window.__edukeInjectedMouseY += event.movementY || 0;
+          syncMouseButtons(event.buttons);
         }
       });
 

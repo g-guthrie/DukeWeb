@@ -1553,28 +1553,47 @@ ACTOR_STATIC void G_MovePlayers(void)
 
                 int const hasActor = G_TileHasActor(sprite[spriteNum].picnum);
                 if (hasActor)
-                {
-#ifdef __EMSCRIPTEN__
-                    if (spriteNum == pPlayer->i)
-                        goto skip_browser_player_execute;
-#endif
                     A_Execute(spriteNum, P_GetP(pSprite), otherPlayerDist);
-                }
 
 #ifdef __EMSCRIPTEN__
-skip_browser_player_execute:
-#endif
-
-#ifdef __EMSCRIPTEN__
-                // Browser port: the full post-A_Execute player maintenance block is
-                // currently where the moved-player tick wedges. Keep only the
-                // minimal state needed for vanilla playability.
+                // Keep the browser path lean, but still run the real player actor
+                // logic so combat and damage resolve through the engine.
                 if (pPlayer->newowner < 0)
                 {
                     pPlayer->q16angvel = 0;
                     pPlayer->oq16ang = pPlayer->q16ang;
                     pPlayer->oq16horiz = pPlayer->q16horiz;
                     pPlayer->oq16horizoff = pPlayer->q16horizoff;
+                }
+
+                if (ud.god)
+                {
+                    pSprite->extra = pPlayer->max_player_health;
+                    pSprite->cstat = 257;
+                    if (!WW2GI)
+                        pPlayer->inv_amount[GET_JETPACK] = 1599;
+                }
+
+#ifndef EDUKE32_STANDALONE
+                if (!FURY && pSprite->extra > 0)
+                {
+                    actor[spriteNum].htowner = spriteNum;
+
+                    if (ud.god == 0)
+                        if (G_CheckForSpaceCeiling(pSprite->sectnum) || G_CheckForSpaceFloor(pSprite->sectnum))
+                        {
+                            LOG_F(WARNING, "%s: player killed by space sector!", EDUKE32_FUNCTION);
+                            P_QuickKill(pPlayer);
+                        }
+                }
+#endif
+
+                if (pSprite->extra <= 0)
+                {
+                    pPlayer->pos.x = pSprite->x;
+                    pPlayer->pos.y = pSprite->y;
+                    pPlayer->pos.z = pSprite->z-(20<<8);
+                    pPlayer->newowner = -1;
                 }
 
                 pSprite->ang = fix16_to_int(pPlayer->q16ang);

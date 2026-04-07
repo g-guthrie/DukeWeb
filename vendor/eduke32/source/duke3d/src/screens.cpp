@@ -1728,48 +1728,20 @@ void G_DisplayLogo(void)
 {
     int32_t const logoflags = G_GetLogoFlags();
 
-#ifdef __EMSCRIPTEN__
-    LOG_F(INFO, "web G_DisplayLogo start g_noLogo=%d g_noLogoAnim=%d logoflags=0x%x", g_noLogo, g_noLogoAnim, logoflags);
-#endif
-
     ready2send = 0;
-#ifdef __EMSCRIPTEN__
-    LOG_F(INFO, "web G_DisplayLogo after ready2send");
-#endif
 
     I_ClearAllInput();
-#ifdef __EMSCRIPTEN__
-    LOG_F(INFO, "web G_DisplayLogo after I_ClearAllInput");
-#endif
 
     videoSetViewableArea(0, 0, xdim-1, ydim-1);
-#ifdef __EMSCRIPTEN__
-    LOG_F(INFO, "web G_DisplayLogo after videoSetViewableArea");
-#endif
     videoClearScreen(0L);
-#ifdef __EMSCRIPTEN__
-    LOG_F(INFO, "web G_DisplayLogo after videoClearScreen");
-#endif
 #ifndef __EMSCRIPTEN__
     G_FadePalette(0, 0, 0, 252);
 #endif
-#ifdef __EMSCRIPTEN__
-    LOG_F(INFO, "web G_DisplayLogo after G_FadePalette");
-#endif
 
     renderFlushPerms();
-#ifdef __EMSCRIPTEN__
-    LOG_F(INFO, "web G_DisplayLogo after renderFlushPerms");
-#endif
     videoNextPage();
-#ifdef __EMSCRIPTEN__
-    LOG_F(INFO, "web G_DisplayLogo after videoNextPage");
-#endif
 
     G_UpdateAppTitle();
-#ifdef __EMSCRIPTEN__
-    LOG_F(INFO, "web G_DisplayLogo after G_UpdateAppTitle");
-#endif
 
 #ifndef __EMSCRIPTEN__
     S_StopMusic();
@@ -1778,35 +1750,20 @@ void G_DisplayLogo(void)
 #endif
 
     int32_t mainMenuEventResult = 0;
-#ifdef __EMSCRIPTEN__
-    LOG_F(INFO, "web G_DisplayLogo before EVENT_MAINMENUSCREEN");
-#endif
     mainMenuEventResult = VM_OnEventWithReturn(EVENT_MAINMENUSCREEN, g_player[myconnectindex].ps->i, myconnectindex, 0);
-#ifdef __EMSCRIPTEN__
-    LOG_F(INFO, "web G_DisplayLogo after EVENT_MAINMENUSCREEN result=%d", mainMenuEventResult);
-#endif
 
     if (!g_noLogo /* && (!g_netServer && ud.multimode < 2) */ &&
         mainMenuEventResult == 0 &&
         (logoflags & LOGO_ENABLED))
     {
-#ifdef __EMSCRIPTEN__
-        LOG_F(INFO, "web G_DisplayLogo entered logo block");
-#endif
         if (
 #ifndef EDUKE32_TOUCH_DEVICES
             VOLUMEALL &&
 #endif
             (logoflags & LOGO_PLAYANIM))
         {
-#ifdef __EMSCRIPTEN__
-            LOG_F(INFO, "web G_DisplayLogo playanim branch");
-#endif
             if (!I_GeneralTrigger() && g_noLogoAnim == 0)
             {
-#ifdef __EMSCRIPTEN__
-                LOG_F(INFO, "web G_DisplayLogo calling Anim_Play");
-#endif
                 Net_GetPackets();
                 Anim_Play("logo.anm");
                 G_FadePalette(0, 0, 0, 252);
@@ -1825,9 +1782,6 @@ void G_DisplayLogo(void)
 
         if (logoflags & LOGO_PLAYMUSIC)
         {
-#ifdef __EMSCRIPTEN__
-            LOG_F(INFO, "web G_DisplayLogo intro music branch");
-#endif
             S_PlaySpecialMusicOrNothing(MUS_INTRO);
         }
 
@@ -1838,9 +1792,6 @@ void G_DisplayLogo(void)
 
             if (logoflags & LOGO_3DRSCREEN)
             {
-#ifdef __EMSCRIPTEN__
-                LOG_F(INFO, "web G_DisplayLogo 3DR screen branch");
-#endif
                 gameDisplay3DRScreen();
 
                 videoClearScreen(0L);
@@ -1855,18 +1806,11 @@ void G_DisplayLogo(void)
 
         if (logoflags & LOGO_TITLESCREEN)
         {
-#ifdef __EMSCRIPTEN__
-            LOG_F(INFO, "web G_DisplayLogo title screen branch");
-#endif
             gameDisplayTitleScreen();
         }
 
         I_ClearAllInput();
     }
-
-#ifdef __EMSCRIPTEN__
-    LOG_F(INFO, "web G_DisplayLogo end");
-#endif
 
     renderFlushPerms();
     videoClearScreen(0L);

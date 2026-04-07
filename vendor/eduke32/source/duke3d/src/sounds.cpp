@@ -39,6 +39,8 @@ int32_t MusicVoice = -1;
 
 static bool MusicPaused;
 static bool SoundPaused;
+static bool g_soundBackendReady;
+static bool g_musicBackendReady;
 
 static uint32_t localQueueIndex;
 static uint32_t freeSlotQueue[MAXVOICES];
@@ -77,6 +79,8 @@ static FORCE_INLINE void S_FillVoiceInfo(voiceinfo_t *snd, int16_t const owner, 
 
 void S_SoundStartup(void)
 {
+    g_soundBackendReady = false;
+
 #ifdef __EMSCRIPTEN__
     // Browser audio callback path is currently trapping; disable FX init while stabilizing web runtime.
     return;
@@ -128,10 +132,14 @@ void S_SoundStartup(void)
     FX_SetReverseStereo(ud.config.ReverseStereo);
 #endif
     FX_SetCallBack(S_Callback);
+    g_soundBackendReady = true;
 }
 
 void S_SoundShutdown(void)
 {
+    if (!g_soundBackendReady)
+        return;
+
     if (MusicVoice >= 0)
         S_MusicShutdown();
 
@@ -142,10 +150,14 @@ void S_SoundShutdown(void)
         LOG_F(ERROR, "%s", tempbuf);
         G_GameExit(tempbuf);
     }
+
+    g_soundBackendReady = false;
 }
 
 void S_MusicStartup(void)
 {
+    g_musicBackendReady = false;
+
 #ifdef __EMSCRIPTEN__
     // Browser startup is currently wedging after audio init; skip MIDI/music init while isolating the stall.
     return;
@@ -167,6 +179,7 @@ void S_MusicStartup(void)
     }
 
     MUSIC_SetVolume(ud.config.MusicVolume);
+    g_musicBackendReady = true;
 
     auto const fil = kopen4load("d3dtimbr.tmb", 0);
 
@@ -183,15 +196,23 @@ void S_MusicStartup(void)
 
 void S_MusicShutdown(void)
 {
+    if (!g_musicBackendReady)
+        return;
+
     S_StopMusic();
 
     int status = MUSIC_Shutdown();
     if (status != MUSIC_Ok)
         LOG_F(ERROR, "Failed tearing down music subsystem: %s", MUSIC_ErrorString(status));
+
+    g_musicBackendReady = false;
 }
 
 void S_PauseMusic(bool paused)
 {
+    if (!g_musicBackendReady && !(g_soundBackendReady && MusicIsWaveform && MusicVoice >= 0))
+        return;
+
     if (MusicPaused == paused || (MusicIsWaveform && MusicVoice < 0))
         return;
 
@@ -211,6 +232,9 @@ void S_PauseMusic(bool paused)
 
 void S_PauseSounds(bool paused)
 {
+    if (!g_soundBackendReady)
+        return;
+
     if (SoundPaused == paused)
         return;
 
@@ -233,10 +257,11 @@ void S_PauseSounds(bool paused)
 
 void S_MusicVolume(int32_t volume)
 {
-    if (MusicIsWaveform && MusicVoice >= 0)
+    if (g_soundBackendReady && MusicIsWaveform && MusicVoice >= 0)
         FX_SetPan(MusicVoice, volume, volume, volume);
 
-    MUSIC_SetVolume(volume);
+    if (g_musicBackendReady)
+        MUSIC_SetVolume(volume);
 }
 
 void S_RestartMusic(void)
@@ -270,6 +295,9 @@ void S_MenuSound(void)
 
 static int S_PlayMusic(const char *fn)
 {
+    if (!g_musicBackendReady && !g_soundBackendReady)
+        return 1;
+
     if (!ud.config.MusicToggle)
         return 0;
 
@@ -439,6 +467,9 @@ void S_SetMusicPosition(int32_t position)
 
 void S_StopMusic(void)
 {
+    if (!g_musicBackendReady && !(g_soundBackendReady && MusicIsWaveform && MusicVoice >= 0))
+        return;
+
     MusicPaused = 0;
 
     if (MusicIsWaveform && MusicVoice >= 0)
@@ -833,12 +864,9 @@ boost:
 
 int S_PlaySound3D(int num, int spriteNum, const vec3_t& pos)
 {
-#ifdef __EMSCRIPTEN__
-    (void)num;
-    (void)spriteNum;
-    (void)pos;
-    return -1;
-#endif
+    if (!g_soundBackendReady)
+        return -1;
+
     int const sndNum = VM_OnEventWithReturn(EVENT_SOUND, spriteNum, screenpeek, num);
 
     if ((sndNum == -1 && num != -1) || !ud.config.SoundToggle || (unsigned)spriteNum >= MAXSPRITES) // check that the user returned -1, but only if -1 wasn't playing already (in which case, warn)
@@ -972,10 +1000,9 @@ error:
 
 int S_PlaySound(int num)
 {
-#ifdef __EMSCRIPTEN__
-    (void)num;
-    return -1;
-#endif
+    if (!g_soundBackendReady)
+        return -1;
+
     int sndnum = VM_OnEventWithReturn(EVENT_SOUND, g_player[screenpeek].ps->i, screenpeek, num);
 
     if ((sndnum == -1 && num != -1) || !ud.config.SoundToggle) // check that the user returned -1, but only if -1 wasn't playing already (in which case, warn)
@@ -1075,6 +1102,12 @@ void S_StopEnvSound(int soundNum, int spriteNum)
 // Do not remove this or make it inline.
 void S_StopAllSounds(void)
 {
+    if (!g_soundBackendReady)
+    {
+        g_dukeTalk = false;
+        return;
+    }
+
     FX_StopAllSounds();
     S_Cleanup();
 
@@ -1122,6 +1155,9 @@ void S_ChangeSoundPitch(int soundNum, int spriteNum, int pitchoffset)
 
 void S_Update(void)
 {
+    if (!g_soundBackendReady)
+        return;
+
     if ((g_player[myconnectindex].ps->gm & (MODE_GAME|MODE_DEMO)) == 0)
         return;
 

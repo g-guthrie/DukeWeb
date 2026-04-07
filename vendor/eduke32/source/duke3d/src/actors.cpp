@@ -9343,59 +9343,29 @@ void G_MoveWorld(void)
 
     MICROPROFILE_SCOPEI("Game", "MoveWorld", MP_YELLOW);
 
-#ifdef __EMSCRIPTEN__
-    auto webMoveWorldPhase = [](char const *label)
-    {
-        static int count = 0;
-        if (count < 48)
-            LOG_F(INFO, "web G_MoveWorld phase %s #%d", label, count + 1);
-        count++;
-    };
-#endif
-
     VM_OnEvent(EVENT_PREWORLD);
     G_DoEventGame(EVENT_PREGAME, false);
     G_RecordOldSpritePos();
-
-#ifdef __EMSCRIPTEN__
-    webMoveWorldPhase("pre");
-#endif
 
     {
         MICROPROFILE_SCOPEI("MoveWorld", "MoveZombieActors", MP_YELLOW2);
         G_MoveZombieActors();  //ST 2
     }
 
-#ifdef __EMSCRIPTEN__
-    webMoveWorldPhase("zombie");
-#endif
-
     {
         MICROPROFILE_SCOPEI("MoveWorld", "MoveWeapons", MP_YELLOW3);
         G_MoveWeapons();  //ST 4
     }
-
-#ifdef __EMSCRIPTEN__
-    webMoveWorldPhase("weapons");
-#endif
 
     {
         MICROPROFILE_SCOPEI("MoveWorld", "MoveTransports", MP_YELLOW4);
         G_MoveTransports();  //ST 9
     }
 
-#ifdef __EMSCRIPTEN__
-    webMoveWorldPhase("transports");
-#endif
-
     {
         MICROPROFILE_SCOPEI("MoveWorld", "MovePlayers", MP_YELLOW);
         G_MovePlayers();  //ST 10
     }
-
-#ifdef __EMSCRIPTEN__
-    webMoveWorldPhase("players");
-#endif
 
     // Must be called here to fix a problem where SE7 Transports and Touchplates do not activate concurrently
     G_RecordOldSpritePosForStatnum(STAT_PLAYER);
@@ -9405,18 +9375,10 @@ void G_MoveWorld(void)
         G_MoveFallers();  //ST 12
     }
 
-#ifdef __EMSCRIPTEN__
-    webMoveWorldPhase("fallers");
-#endif
-
     {
         MICROPROFILE_SCOPEI("MoveWorld", "MoveMisc", MP_YELLOW3);
         G_MoveMisc();  //ST 5
     }
-
-#ifdef __EMSCRIPTEN__
-    webMoveWorldPhase("misc");
-#endif
 
     double actorsTime = timerGetFractionalTicks();
     auto framecnt2 = g_frameCounter;
@@ -9425,10 +9387,6 @@ void G_MoveWorld(void)
         MICROPROFILE_SCOPEI("MoveWorld", "MoveActors", MP_YELLOW4);
         G_MoveActors();  //ST 1
     }
-
-#ifdef __EMSCRIPTEN__
-    webMoveWorldPhase("actors");
-#endif
 
     actorsTime = timerGetFractionalTicks() - actorsTime;
 
@@ -9443,27 +9401,15 @@ void G_MoveWorld(void)
     G_DoEffectorLights();
 #endif
 
-#ifdef __EMSCRIPTEN__
-    webMoveWorldPhase("lights");
-#endif
-
     {
         MICROPROFILE_SCOPEI("MoveWorld", "MoveEffectors", MP_YELLOW);
         G_MoveEffectors();  //ST 3
     }
 
-#ifdef __EMSCRIPTEN__
-    webMoveWorldPhase("effectors");
-#endif
-
     {
         MICROPROFILE_SCOPEI("MoveWorld", "MoveStandables", MP_YELLOW2);
         G_MoveStandables();  //ST 6
     }
-
-#ifdef __EMSCRIPTEN__
-    webMoveWorldPhase("standables");
-#endif
 
 
     VM_OnEvent(EVENT_WORLD);
@@ -9473,18 +9419,10 @@ void G_MoveWorld(void)
     G_RefreshLights();
     G_DoSectorAnimations();
 
-#ifdef __EMSCRIPTEN__
-    webMoveWorldPhase("postevents");
-#endif
-
     {
         MICROPROFILE_SCOPEI("MoveWorld", "MoveFX", MP_YELLOW3);
         G_MoveFX();  //ST 11
     }
-
-#ifdef __EMSCRIPTEN__
-    webMoveWorldPhase("fx");
-#endif
 
     worldTime = timerGetFractionalTicks() - worldTime;
 

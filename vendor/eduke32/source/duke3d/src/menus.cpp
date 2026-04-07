@@ -8114,15 +8114,6 @@ void M_DisplayMenus(void)
 
     Net_GetPackets();
 
-#ifdef __EMSCRIPTEN__
-    static int loggedMenuState = 0;
-    if (loggedMenuState < 5)
-    {
-        LOG_F(INFO, "web M_DisplayMenus #%d gm=0x%x currentMenu=%d", loggedMenuState + 1, g_player[myconnectindex].ps->gm, g_currentMenu);
-        loggedMenuState++;
-    }
-#endif
-
     if ((g_player[myconnectindex].ps->gm&MODE_MENU) == 0)
     {
         walock[TILE_LOADSHOT] = CACHE1D_FREE;

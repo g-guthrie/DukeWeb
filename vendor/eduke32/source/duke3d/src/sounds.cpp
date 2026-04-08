@@ -80,11 +80,6 @@ static FORCE_INLINE void S_FillVoiceInfo(voiceinfo_t *snd, int16_t const owner, 
 void S_SoundStartup(void)
 {
     g_soundBackendReady = false;
-
-#ifdef __EMSCRIPTEN__
-    // Browser audio callback path is currently trapping; disable FX init while stabilizing web runtime.
-    return;
-#endif
 #ifdef _WIN32
     void *initdata = (void *) win_gethwnd(); // used for DirectSound
 #else
@@ -157,11 +152,6 @@ void S_SoundShutdown(void)
 void S_MusicStartup(void)
 {
     g_musicBackendReady = false;
-
-#ifdef __EMSCRIPTEN__
-    // Browser startup is currently wedging after audio init; skip MIDI/music init while isolating the stall.
-    return;
-#endif
     int status;
     if ((status = MUSIC_Init(ud.config.MusicDevice)) == MUSIC_Ok)
     {

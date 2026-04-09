@@ -327,12 +327,12 @@ async function getSnapshot(cdp) {
         innerHeight: window.innerHeight,
         rect,
         pads,
-        sdlMouse: globalThis.__edukeSdlMouse || null,
-        cacheProgress: globalThis.__edukeCacheProgress || null,
-        tileLoad: globalThis.__edukeTileLoad || null,
-        drawProgress: globalThis.__edukeDrawProgress || null,
-        state: globalThis.__edukeState || null,
-        submitted: globalThis.__edukeSubmittedInput || null,
+        sdlMouse: globalThis.__edukeHost?.sdlMouse || globalThis.__edukeSdlMouse || null,
+        cacheProgress: globalThis.__edukeHost?.cacheProgress || globalThis.__edukeCacheProgress || null,
+        tileLoad: globalThis.__edukeHost?.tileLoad || globalThis.__edukeTileLoad || null,
+        drawProgress: globalThis.__edukeHost?.drawProgress || globalThis.__edukeDrawProgress || null,
+        state: globalThis.__edukeHost?.state || globalThis.__edukeState || null,
+        submitted: globalThis.__edukeHost?.submittedInput || globalThis.__edukeSubmittedInput || null,
       };
     })()`,
   );

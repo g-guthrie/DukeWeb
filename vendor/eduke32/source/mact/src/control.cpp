@@ -10,6 +10,7 @@
 
 #include "_control.h"
 #include "baselayer.h"
+#include "browserlayer.h"
 #include "build.h"
 #include "common.h"
 #include "compat.h"
@@ -21,10 +22,6 @@
 
 #ifdef __ANDROID__
 #include "android.h"
-#endif
-
-#ifdef __EMSCRIPTEN__
-#include <emscripten.h>
 #endif
 
 // TODO: add mact cvars and make this user configurable
@@ -70,26 +67,6 @@ int32_t CONTROL_ButtonFlags[CONTROL_NUM_FLAGS];
 ConsoleKeyBind_t CONTROL_KeyBinds[MAXBOUNDKEYS + MAXMOUSEBUTTONS];
 bool CONTROL_BindsEnabled = 0;
 
-#ifdef __EMSCRIPTEN__
-extern "C" int32_t webGetInjectedButtonsLow(void);
-EM_JS(int32_t, webConsumeInjectedMouseX, (), {
-    const state = globalThis.__edukeInput;
-    const value = state ? (state.injectedMouseX | 0) : (globalThis.__edukeInjectedMouseX | 0);
-    if (state)
-        state.injectedMouseX = 0;
-    globalThis.__edukeInjectedMouseX = 0;
-    return value;
-});
-EM_JS(int32_t, webConsumeInjectedMouseY, (), {
-    const state = globalThis.__edukeInput;
-    const value = state ? (state.injectedMouseY | 0) : (globalThis.__edukeInjectedMouseY | 0);
-    if (state)
-        state.injectedMouseY = 0;
-    globalThis.__edukeInjectedMouseY = 0;
-    return value;
-});
-#endif
-
 #define CONTROL_CheckRange(which) ((unsigned)which >= (unsigned)CONTROL_NUM_FLAGS)
 #define BIND(x, s, r, k) do { Xfree(x.cmdstr); x.cmdstr = s; x.repeat = r; x.key = k; } while (0)
 
@@ -126,10 +103,8 @@ static void controlUpdateMouseState(ControlInfo *const info)
     vec2_t input;
     mouseReadPos(&input.x, &input.y);
 
-#ifdef __EMSCRIPTEN__
-    input.x += webConsumeInjectedMouseX();
-    input.y += webConsumeInjectedMouseY();
-#endif
+    input.x += browserConsumeInjectedMouseX();
+    input.y += browserConsumeInjectedMouseY();
     
     vec2f_t finput = { input.x * CONTROL_MouseSensitivityUnit * CONTROL_MouseSensitivity * CONTROL_MouseAxesSensitivity[0],
                        input.y * CONTROL_MouseSensitivityUnit * CONTROL_MouseSensitivity * CONTROL_MouseAxesSensitivity[1] };
@@ -707,9 +682,8 @@ static void controlUpdateGameFunctions(void)
     controlUpdateFlagsFromButtons(CONTROL_ButtonFlags);
     controlUpdateFlagsFromAxes(CONTROL_ButtonFlags);
 
-#ifdef __EMSCRIPTEN__
     {
-        uint32_t const injectedButtons = (uint32_t)webGetInjectedButtonsLow();
+        uint32_t const injectedButtons = (uint32_t)browserGetInjectedButtonsLow();
 
         if (injectedButtons)
             CONTROL_LastSeenInput = LastSeenInput::Keyboard;
@@ -717,7 +691,6 @@ static void controlUpdateGameFunctions(void)
         for (int i = 0; i < min<int>(CONTROL_NUM_FLAGS, 32); ++i)
             CONTROL_ButtonFlags[i] |= (injectedButtons >> i) & 1u;
     }
-#endif
 
     CONTROL_ButtonHeldState = CONTROL_ButtonState;
     CONTROL_ButtonState = 0;
@@ -733,9 +706,7 @@ static void controlUpdateGameFunctions(void)
     }
     while (i--);
 
-#ifdef __EMSCRIPTEN__
-    CONTROL_ButtonState |= (uint64_t)(uint32_t)webGetInjectedButtonsLow();
-#endif
+    CONTROL_ButtonState |= (uint64_t)(uint32_t)browserGetInjectedButtonsLow();
 
     memset(CONTROL_ButtonFlags, 0, sizeof(CONTROL_ButtonFlags));
 }

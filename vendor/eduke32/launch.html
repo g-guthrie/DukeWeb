@@ -174,6 +174,7 @@
           right: 10px;
           padding: 8px 10px;
         }
+
       }
     </style>
   </head>
@@ -236,11 +237,42 @@
 
       const params = new URLSearchParams(window.location.search);
       const autotestEnabled = params.get("autotest") === "1";
-      window.__edukeAutotestConfig = {
-        enabled: autotestEnabled,
-        start: performance.now(),
-        sampleCounter: 0,
+      const host = window.__edukeHost || (window.__edukeHost = {});
+
+      host.input = host.input || window.__edukeInput || {};
+      if (typeof host.input.injectedButtonsLow !== "number") host.input.injectedButtonsLow = 0;
+      if (typeof host.input.injectedMouseX !== "number") host.input.injectedMouseX = 0;
+      if (typeof host.input.injectedMouseY !== "number") host.input.injectedMouseY = 0;
+      if (typeof host.input.injectedButtonsObserved !== "number") host.input.injectedButtonsObserved = 0;
+
+      host.state = host.state || window.__edukeState || {};
+      host.submittedInput = host.submittedInput || window.__edukeSubmittedInput || {};
+      host.drawProgress = host.drawProgress || window.__edukeDrawProgress || {};
+      host.cacheProgress = host.cacheProgress || window.__edukeCacheProgress || {};
+      host.tileLoad = host.tileLoad || window.__edukeTileLoad || {};
+      host.sdlMouse = host.sdlMouse || window.__edukeSdlMouse || {};
+      host.sdlEvents = host.sdlEvents || window.__edukeSdlEvents || [];
+      host.sequenceSamples = host.sequenceSamples || window.__edukeSequenceSamples || [];
+      host.autotestConfig = host.autotestConfig || window.__edukeAutotestConfig || {};
+      host.autotestConfig.enabled = autotestEnabled;
+      host.autotestConfig.start = performance.now();
+      host.autotestConfig.sampleCounter = 0;
+
+      const syncLegacyHostGlobals = () => {
+        window.__edukeHost = host;
+        window.__edukeInput = host.input;
+        window.__edukeState = host.state;
+        window.__edukeSubmittedInput = host.submittedInput;
+        window.__edukeDrawProgress = host.drawProgress;
+        window.__edukeCacheProgress = host.cacheProgress;
+        window.__edukeTileLoad = host.tileLoad;
+        window.__edukeSdlMouse = host.sdlMouse;
+        window.__edukeSdlEvents = host.sdlEvents;
+        window.__edukeSequenceSamples = host.sequenceSamples;
+        window.__edukeAutotestConfig = host.autotestConfig;
       };
+
+      syncLegacyHostGlobals();
 
       const GAMEFUNCS = Object.freeze({
         moveForward: 0,
@@ -257,19 +289,14 @@
         strafeRight: 16,
       });
 
-      const inputState = Object.assign(window.__edukeInput || {}, {
-        injectedButtonsLow: 0,
-        injectedMouseX: 0,
-        injectedMouseY: 0,
-        injectedButtonsObserved: 0,
-      });
-      window.__edukeInput = inputState;
+      const inputState = host.input;
 
       const syncLegacyInputGlobals = () => {
         window.__edukeInjectedButtonsLow = inputState.injectedButtonsLow;
         window.__edukeInjectedMouseX = inputState.injectedMouseX;
         window.__edukeInjectedMouseY = inputState.injectedMouseY;
         window.__edukeInjectedButtonsObserved = inputState.injectedButtonsObserved;
+        syncLegacyHostGlobals();
       };
 
       const setInjectedButtonsLow = (value) => {
@@ -334,7 +361,8 @@
       window.__edukeClearInjectedInput = clearInjectedInput;
       window.__edukeRunActionSequence = (actions, sampleMs = 100) => {
         clearInjectedInput();
-        window.__edukeSequenceSamples = [];
+        host.sequenceSamples = [];
+        window.__edukeSequenceSamples = host.sequenceSamples;
         let lastSampleAt = -Infinity;
 
         const sample = (now) => {
@@ -348,9 +376,9 @@
             kickback: state.kickback ?? 0,
             frameCounter: state.frameCounter ?? 0,
           };
-          window.__edukeSequenceSamples.push(entry);
-          if (window.__edukeSequenceSamples.length > 256) {
-            window.__edukeSequenceSamples.shift();
+          host.sequenceSamples.push(entry);
+          if (host.sequenceSamples.length > 256) {
+            host.sequenceSamples.shift();
           }
           console.log("EDUKE_SAMPLE", JSON.stringify(entry));
         };
@@ -384,11 +412,17 @@
 
         requestAnimationFrame(tick);
       };
+      host.api = Object.assign(host.api || {}, {
+        setInjectedButton,
+        clearInjectedInput,
+        runActionSequence: window.__edukeRunActionSequence,
+      });
 
       const startAutotest = () => {
-        if (!autotestEnabled || window.__edukeAutotestStarted) {
+        if (!autotestEnabled || host.autotestStarted || window.__edukeAutotestStarted) {
           return;
         }
+        host.autotestStarted = true;
         window.__edukeAutotestStarted = true;
         browserOptions.pointerLock = false;
         clearInjectedInput();
@@ -400,8 +434,8 @@
             return;
           }
 
-          window.__edukeAutotestConfig.start = performance.now();
-          window.__edukeAutotestConfig.sampleCounter = 0;
+          host.autotestConfig.start = performance.now();
+          host.autotestConfig.sampleCounter = 0;
 
           window.__edukeRunActionSequence(
             [
@@ -413,7 +447,7 @@
           );
 
           const finish = () => {
-            const samples = window.__edukeSequenceSamples || [];
+            const samples = host.sequenceSamples || [];
             if (samples.length < 2) {
               requestAnimationFrame(finish);
               return;
@@ -479,7 +513,7 @@
 
       const isMenuActive = () => ((window.__edukeState?.gm || 0) & 0x1) !== 0;
 
-      const requestPointerLockIfEnabled = () => {
+      const requestPointerLockIfEnabled = (source = "unknown") => {
         if (
           browserOptions.pointerLock &&
           !isMenuActive() &&
@@ -488,7 +522,13 @@
         ) {
           const result = canvasElement.requestPointerLock();
           if (result && typeof result.catch === "function") {
-            result.catch(() => {});
+            result.catch((error) => {
+              console.warn("EDUKE_POINTERLOCK_REQUEST_FAILED", JSON.stringify({
+                source,
+                name: error?.name || "",
+                message: error?.message || "",
+              }));
+            });
           }
         }
       };
@@ -509,6 +549,7 @@
 
       canvasElement.addEventListener("pointerdown", () => {
         focusCanvas();
+        requestPointerLockIfEnabled("pointerdown");
       });
 
       canvasElement.addEventListener("mousedown", (event) => {
@@ -519,7 +560,7 @@
           }
           if (browserOptions.pointerLock && document.pointerLockElement !== canvasElement) {
             focusCanvas();
-            requestPointerLockIfEnabled();
+            requestPointerLockIfEnabled("mousedown");
             event.preventDefault();
             return;
           }
@@ -536,12 +577,28 @@
           if (isMenuActive()) {
             return;
           }
+          if (browserOptions.pointerLock && document.pointerLockElement !== canvasElement) {
+            requestPointerLockIfEnabled("mouseup");
+          }
           syncMouseButtons(event.buttons);
           event.preventDefault();
         } else if (event.button === 2) {
           syncMouseButtons(event.buttons);
           event.preventDefault();
         }
+      });
+
+      canvasElement.addEventListener("click", (event) => {
+        if (event.button !== 0) {
+          return;
+        }
+
+        if (isMenuActive()) {
+          focusCanvas();
+          return;
+        }
+
+        requestPointerLockIfEnabled("click");
       });
 
       canvasElement.addEventListener("mouseleave", () => {
@@ -597,7 +654,7 @@
         resyncCanvasPresentation();
         focusCanvas();
         if (document.fullscreenElement === canvasWrapElement) {
-          requestPointerLockIfEnabled();
+          requestPointerLockIfEnabled("fullscreenchange");
         }
       });
 
@@ -719,6 +776,64 @@
         resyncCanvasPresentation();
       });
 
+      const installMainLoopWatchdog = () => {
+        const watchdog = host.watchdog || (host.watchdog = {});
+        watchdog.lastFrameCounter = -1;
+        watchdog.lastChangeAt = performance.now();
+        watchdog.lastKickAt = -Infinity;
+        watchdog.kickCount = 0;
+
+        setInterval(() => {
+          const state = host.state || window.__edukeState || {};
+          const frameCounter = state.frameCounter ?? -1;
+          const gameplayActive = (state.gm || 0) === 4;
+          const visible = document.visibilityState === "visible";
+          const ready = document.body.dataset.ready === "true";
+          const now = performance.now();
+
+          if (frameCounter !== watchdog.lastFrameCounter) {
+            watchdog.lastFrameCounter = frameCounter;
+            watchdog.lastChangeAt = now;
+            return;
+          }
+
+          if (!gameplayActive || !visible || !ready) {
+            return;
+          }
+
+          const stalledFor = now - watchdog.lastChangeAt;
+          if (stalledFor < 1200 || now - watchdog.lastKickAt < 2000) {
+            return;
+          }
+
+          watchdog.lastKickAt = now;
+          watchdog.kickCount += 1;
+          console.warn("EDUKE_MAINLOOP_STALL", JSON.stringify({
+            stalledFor,
+            frameCounter,
+            gm: state.gm || 0,
+            loop: typeof MainLoop !== "undefined" ? {
+              running: !!MainLoop.running,
+              currentlyRunningMainloop: MainLoop.currentlyRunningMainloop ?? null,
+              timingMode: MainLoop.timingMode ?? null,
+              timingValue: MainLoop.timingValue ?? null,
+            } : null,
+          }));
+
+          try {
+            if (typeof MainLoop !== "undefined" && MainLoop.running === false) {
+              Module.resumeMainLoop?.();
+              return;
+            }
+
+            Module.pauseMainLoop?.();
+            Module.resumeMainLoop?.();
+          } catch (error) {
+            console.error("EDUKE_MAINLOOP_STALL_RECOVERY_FAILED", error);
+          }
+        }, 250);
+      };
+
       var Module = {
         elementPointerLock: false,
         onRuntimeInitialized() {
@@ -748,6 +863,7 @@
         },
       };
 
+      installMainLoopWatchdog();
       setStatus("Downloading...");
       window.onerror = (message) => {
         setStatus("Exception thrown, see JavaScript console");

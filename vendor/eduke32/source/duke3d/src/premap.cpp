@@ -21,6 +21,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 //-------------------------------------------------------------------------
 
 #include "anim.h"
+#include "browserlayer.h"
 #include "cmdline.h"
 #include "demo.h"
 #include "duke3d.h"
@@ -29,10 +30,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "sbar.h"
 
 #include "vfs.h"
-
-#ifdef __EMSCRIPTEN__
-# include <emscripten/emscripten.h>
-#endif
 
 static uint8_t precachehightile[2][(MAXTILES+7)>>3];
 static int32_t g_precacheCount;
@@ -518,17 +515,8 @@ void G_CacheMapData(void)
     int pctDisplayed = -1;
     for (int i = 0; i < MAXTILES && cnt < g_precacheCount; i++)
     {
-#ifdef __EMSCRIPTEN__
         if ((i & 31) == 0)
-        {
-            EM_ASM({
-                let progress = globalThis.__edukeCacheProgress || (globalThis.__edukeCacheProgress = {});
-                progress.tile = $0;
-                progress.loaded = $1;
-                progress.queued = $2;
-            }, i, cnt, g_precacheCount);
-        }
-#endif
+            browserPublishCacheProgress(i, cnt, g_precacheCount, 0);
         if (bitmap_test(gotpic, i))
         {
             cnt++;
@@ -565,19 +553,11 @@ void G_CacheMapData(void)
     if (cnt != g_precacheCount)
         LOG_F(WARNING, "Precache count mismatch: queued %d tiles, processed %d valid gotpic entries.", g_precacheCount, cnt);
 
-#ifdef __EMSCRIPTEN__
-    EM_ASM({
-        let progress = globalThis.__edukeCacheProgress || (globalThis.__edukeCacheProgress = {});
-        progress.tile = -1;
-        progress.loaded = $0;
-        progress.queued = $1;
-        progress.done = 1;
-    }, cnt, g_precacheCount);
-#endif
+    browserPublishCacheProgress(-1, cnt, g_precacheCount, 1);
 
     Bmemset(gotpic, 0, sizeof(gotpic));
 
-    LOG_F(INFO, "Cache time: %dms.", timerGetTicks() - cacheStartTime);
+    LOG_F(INFO, "Cache time: %ums.", timerGetTicks() - cacheStartTime);
 }
 
 int fragbarheight(void)

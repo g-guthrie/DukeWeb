@@ -5,6 +5,17 @@
 
 # Build and temporary probe artifacts
 build/
+!vendor/eduke32/source/build/
+vendor/eduke32/source/build/*
+!vendor/eduke32/source/build/include/
+vendor/eduke32/source/build/include/*
+!vendor/eduke32/source/build/include/browserlayer.h
+!vendor/eduke32/source/build/src/
+vendor/eduke32/source/build/src/*
+!vendor/eduke32/source/build/src/baselayer.cpp
+!vendor/eduke32/source/build/src/browserlayer.cpp
+!vendor/eduke32/source/build/src/sdlayer.cpp
+!vendor/eduke32/source/build/src/tiles.cpp
 tmp-*.png
 tmp-*.html
 tmp-*.json

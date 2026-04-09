@@ -326,7 +326,7 @@ static FORCE_INLINE int dukeMaybeDrawFrame(void)
     // g_frameJustDrawn is set by G_DrawFrame() (and thus by the coroutine)
     // it isn't cleared until the next game tic is processed.
 
-    if (g_vm_preempt && !g_saveRequested && !g_frameJustDrawn && timerGetNanoTicks() >= g_lastFrameEndTime + (g_lastFrameEndTime - g_lastFrameStartTime - g_lastFrameDuration) && engineFPSLimit())
+    if (g_vm_preempt && !g_saveRequested && !g_frameJustDrawn && engineFPSLimit())
     {
         g_switchRoutine(co_drawframe);
         return 1;

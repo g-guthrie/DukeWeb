@@ -44,6 +44,34 @@ uint8_t g_radiusDmgStatnums[(MAXSTATUS+7)>>3];
 
 int32_t otherp;
 
+static inline bool A_ValidateSpriteTraversalHead(char const *context, int spriteNum, int *iterations)
+{
+    if ((unsigned) spriteNum >= MAXSPRITES)
+    {
+        LOG_F(ERROR, "web %s invalid sprite index %d", context, spriteNum);
+        return false;
+    }
+
+    if (++(*iterations) > MAXSPRITES)
+    {
+        LOG_F(ERROR, "web %s exceeded traversal budget at sprite %d", context, spriteNum);
+        return false;
+    }
+
+    return true;
+}
+
+static inline int A_SanitizeNextSprite(char const *context, int spriteNum, int nextSprite)
+{
+    if (nextSprite == spriteNum)
+    {
+        LOG_F(ERROR, "web %s detected self-loop at sprite %d", context, spriteNum);
+        return -1;
+    }
+
+    return nextSprite;
+}
+
 int G_SetInterpolation(int32_t *const posptr)
 {
     if (g_interpolationCnt >= MAXINTERPOLATIONS)
@@ -765,6 +793,15 @@ void G_Polymer_UnInit(void)
 // deletesprite() game wrapper
 void A_DeleteSprite(int spriteNum)
 {
+    if ((unsigned) spriteNum >= MAXSPRITES)
+    {
+        LOG_F(ERROR, "A_DeleteSprite rejected invalid sprite index %d", spriteNum);
+        return;
+    }
+
+    if (!E_SpriteIsValid(spriteNum))
+        return;
+
     if (EDUKE32_PREDICT_FALSE(block_deletesprite))
     {
         LOG_F(ERROR, "A_DeleteSprite(): tried to remove sprite %d in EVENT_EGS!", spriteNum);
@@ -798,6 +835,9 @@ void A_DeleteSprite(int spriteNum)
 
 void A_AddToDeleteQueue(int spriteNum)
 {
+    if ((unsigned) spriteNum >= MAXSPRITES || !E_SpriteIsValid(spriteNum))
+        return;
+
     if (g_netClient || (g_deleteQueueSize == 0)) // [75] Clients should not use SpriteDeletionQueue[] and just set the sprites invisible immediately in A_DeleteSprite
     {
         A_DeleteSprite(spriteNum);
@@ -1142,10 +1182,14 @@ ACTOR_STATIC void A_MaybeAwakenBadGuys(int const spriteNum)
 ACTOR_STATIC void G_MoveZombieActors(void)
 {
     int spriteNum = headspritestat[STAT_ZOMBIEACTOR], canSeePlayer;
+    int traversalCount = 0;
 
     while (spriteNum >= 0)
     {
-        int const  nextSprite = nextspritestat[spriteNum];
+        if (!A_ValidateSpriteTraversalHead("G_MoveZombieActors", spriteNum, &traversalCount))
+            break;
+
+        int const  nextSprite = A_SanitizeNextSprite("G_MoveZombieActors", spriteNum, nextspritestat[spriteNum]);
         int32_t    playerDist;
         auto const pSprite   = &sprite[spriteNum];
         int const  playerNum = A_FindPlayer(pSprite, &playerDist);
@@ -1437,12 +1481,16 @@ void A_MoveCyclers(void)
 void A_MoveDummyPlayers(void)
 {
     int spriteNum = headspritestat[STAT_DUMMYPLAYER];
+    int traversalCount = 0;
 
     while (spriteNum >= 0)
     {
+        if (!A_ValidateSpriteTraversalHead("A_MoveDummyPlayers", spriteNum, &traversalCount))
+            break;
+
         int const  playerNum     = P_Get(OW(spriteNum));
         auto const pPlayer       = g_player[playerNum].ps;
-        int const  nextSprite    = nextspritestat[spriteNum];
+        int const  nextSprite    = A_SanitizeNextSprite("A_MoveDummyPlayers", spriteNum, nextspritestat[spriteNum]);
         int const  playerSectnum = pPlayer->cursectnum;
 
         if (pPlayer->on_crane >= 0 || (playerSectnum >= 0 && sector[playerSectnum].lotag != ST_1_ABOVE_WATER) || sprite[pPlayer->i].extra <= 0
@@ -1490,26 +1538,24 @@ static FORCE_INLINE fix16_t P_GetQ16AngleDeltaForTic(DukePlayer_t const *pPlayer
 ACTOR_STATIC void G_MovePlayers(void)
 {
     int spriteNum = headspritestat[STAT_PLAYER];
+    int traversalCount = 0;
 
     while (spriteNum >= 0)
     {
+        if (!A_ValidateSpriteTraversalHead("G_MovePlayers", spriteNum, &traversalCount))
+            break;
+
         if ((unsigned)spriteNum >= MAXSPRITES)
         {
             LOG_F(ERROR, "web G_MovePlayers invalid sprite index %d", spriteNum);
             break;
         }
 
-        int nextSprite = nextspritestat[spriteNum];
+        int nextSprite = A_SanitizeNextSprite("G_MovePlayers", spriteNum, nextspritestat[spriteNum]);
         auto const pSprite    = &sprite[spriteNum];
         int const  playerNum  = P_GetP(pSprite);
         auto &     thisPlayer = g_player[playerNum];
         auto const pPlayer    = thisPlayer.ps;
-
-        if (nextSprite == spriteNum)
-        {
-            LOG_F(ERROR, "web G_MovePlayers detected self-loop at sprite %d", spriteNum);
-            nextSprite = -1;
-        }
 
         if (pSprite->owner >= 0)
         {
@@ -1705,11 +1751,15 @@ next_sprite:
 ACTOR_STATIC void G_MoveFX(void)
 {
     int spriteNum = headspritestat[STAT_FX];
+    int traversalCount = 0;
 
     while (spriteNum >= 0)
     {
+        if (!A_ValidateSpriteTraversalHead("G_MoveFX", spriteNum, &traversalCount))
+            break;
+
         auto const pSprite    = &sprite[spriteNum];
-        int const  nextSprite = nextspritestat[spriteNum];
+        int const  nextSprite = A_SanitizeNextSprite("G_MoveFX", spriteNum, nextspritestat[spriteNum]);
 
         switch (tileGetMapping(pSprite->picnum))
         {
@@ -1841,10 +1891,14 @@ next_sprite:
 ACTOR_STATIC void G_MoveFallers(void)
 {    
     int spriteNum = headspritestat[STAT_FALLER];
+    int traversalCount = 0;
 
     while (spriteNum >= 0)
     {
-        int const  nextSprite = nextspritestat[spriteNum];
+        if (!A_ValidateSpriteTraversalHead("G_MoveFallers", spriteNum, &traversalCount))
+            break;
+
+        int const  nextSprite = A_SanitizeNextSprite("G_MoveFallers", spriteNum, nextspritestat[spriteNum]);
         auto const pSprite    = &sprite[spriteNum];
         int const  sectNum    = pSprite->sectnum;
 
@@ -1938,10 +1992,14 @@ next_sprite:
 ACTOR_STATIC void G_MoveStandables(void)
 {    
     int spriteNum = headspritestat[STAT_STANDABLE], j, switchPic;
+    int traversalCount = 0;
 
     while (spriteNum >= 0)
     {
-        int const  nextSprite = nextspritestat[spriteNum];
+        if (!A_ValidateSpriteTraversalHead("G_MoveStandables", spriteNum, &traversalCount))
+            break;
+
+        int const  nextSprite = A_SanitizeNextSprite("G_MoveStandables", spriteNum, nextspritestat[spriteNum]);
         auto const pData      = &actor[spriteNum].t_data[0];
         auto const pSprite    = &sprite[spriteNum];
         int const  sectNum    = pSprite->sectnum;
@@ -3452,10 +3510,14 @@ std::map<int, SpriteTracerData> tracerData;
 ACTOR_STATIC void G_MoveWeapons(void)
 {
     int spriteNum = headspritestat[STAT_PROJECTILE];
+    int traversalCount = 0;
 
     while (spriteNum >= 0)
     {
-        int const  nextSprite = nextspritestat[spriteNum];
+        if (!A_ValidateSpriteTraversalHead("G_MoveWeapons", spriteNum, &traversalCount))
+            break;
+
+        int const  nextSprite = A_SanitizeNextSprite("G_MoveWeapons", spriteNum, nextspritestat[spriteNum]);
         auto const pSprite    = &sprite[spriteNum];
 
         if (pSprite->sectnum < 0)
@@ -3930,10 +3992,14 @@ static int A_CheckNonTeleporting(int const spriteNum)
 ACTOR_STATIC void G_MoveTransports(void)
 {
     int spriteNum = headspritestat[STAT_TRANSPORT];
+    int traversalCount = 0;
 
     while (spriteNum >= 0)
     {
-        int const nextSprite = nextspritestat[spriteNum];
+        if (!A_ValidateSpriteTraversalHead("G_MoveTransports", spriteNum, &traversalCount))
+            break;
+
+        int const nextSprite = A_SanitizeNextSprite("G_MoveTransports", spriteNum, nextspritestat[spriteNum]);
 
         if (OW(spriteNum) == spriteNum)
         {
@@ -3949,9 +4015,13 @@ ACTOR_STATIC void G_MoveTransports(void)
             T1(spriteNum)--;
 
         int sectSprite = headspritesect[sectNum];
+        int sectorTraversalCount = 0;
         while (sectSprite >= 0)
         {
-            int const nextSectSprite = nextspritesect[sectSprite];
+            if (!A_ValidateSpriteTraversalHead("G_MoveTransports[sector]", sectSprite, &sectorTraversalCount))
+                break;
+
+            int const nextSectSprite = A_SanitizeNextSprite("G_MoveTransports[sector]", sectSprite, nextspritesect[sectSprite]);
 
             switch (sprite[sectSprite].statnum)
             {
@@ -4253,9 +4323,22 @@ static int A_FindLocatorWithHiLoTags(int const hitag, int const tag, int const s
 ACTOR_STATIC void G_MoveActors(void)
 {
     int spriteNum = headspritestat[STAT_ACTOR];
+    int actorIterations = 0;
 
     while (spriteNum >= 0)
     {
+        if ((unsigned) spriteNum >= MAXSPRITES)
+        {
+            LOG_F(ERROR, "web G_MoveActors invalid sprite index %d", spriteNum);
+            break;
+        }
+
+        if (++actorIterations > MAXSPRITES)
+        {
+            LOG_F(ERROR, "web G_MoveActors exceeded traversal budget at sprite %d", spriteNum);
+            break;
+        }
+
         int const  nextSprite = nextspritestat[spriteNum];
         auto const pSprite    = &sprite[spriteNum];
         int const  sectNum    = pSprite->sectnum;
@@ -4265,6 +4348,13 @@ ACTOR_STATIC void G_MoveActors(void)
 
         if (pSprite->xrepeat == 0 || sectNum < 0 || sectNum >= MAXSECTORS)
             DELETE_SPRITE_AND_CONTINUE(spriteNum);
+
+        if (nextSprite == spriteNum)
+        {
+            LOG_F(ERROR, "web G_MoveActors detected self-loop at sprite %d picnum=%d sect=%d", spriteNum, pSprite->picnum, sectNum);
+            spriteNum = -1;
+            continue;
+        }
 
         switchPic = pSprite->picnum;
 
@@ -5658,10 +5748,14 @@ next_sprite:
 ACTOR_STATIC void G_MoveMisc(void)  // STATNUM 5
 {
     int spriteNum = headspritestat[STAT_MISC];
+    int traversalCount = 0;
 
     while (spriteNum >= 0)
     {
-        int const  nextSprite = nextspritestat[spriteNum];
+        if (!A_ValidateSpriteTraversalHead("G_MoveMisc", spriteNum, &traversalCount))
+            break;
+
+        int const  nextSprite = A_SanitizeNextSprite("G_MoveMisc", spriteNum, nextspritestat[spriteNum]);
         int32_t    playerDist;
         auto const pData   = actor[spriteNum].t_data;
         auto const pSprite = &sprite[spriteNum];
@@ -6427,6 +6521,7 @@ ACTOR_STATIC void G_MoveEffectors(void)   //STATNUM 3
 {
     int32_t q = 0, j, k, l, m, x;
     int spriteNum = headspritestat[STAT_EFFECTOR];
+    int traversalCount = 0;
 
 #ifndef EDUKE32_STANDALONE
     if (!FURY)
@@ -6440,7 +6535,10 @@ ACTOR_STATIC void G_MoveEffectors(void)   //STATNUM 3
 #endif
     while (spriteNum >= 0)
     {
-        int const  nextSprite = nextspritestat[spriteNum];
+        if (!A_ValidateSpriteTraversalHead("G_MoveEffectors", spriteNum, &traversalCount))
+            break;
+
+        int const  nextSprite = A_SanitizeNextSprite("G_MoveEffectors", spriteNum, nextspritestat[spriteNum]);
         auto const pSprite    = &sprite[spriteNum];
         int32_t    playerDist;
         int        playerNum = A_FindPlayer(pSprite, &playerDist);

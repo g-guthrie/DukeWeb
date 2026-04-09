@@ -31,6 +31,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "crc32.h"
 #include "demo.h"
 #include "duke3d.h"
+#include "game_browser.h"
 #include "input.h"
 #include "menus.h"
 #include "microprofile.h"
@@ -46,10 +47,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 #ifdef __ANDROID__
 #include "android.h"
-#endif
-
-#ifdef __EMSCRIPTEN__
-#include <emscripten/emscripten.h>
 #endif
 
 #include "vfs.h"
@@ -288,110 +285,6 @@ EDUKE32_NORETURN void app_exit(int returnCode);
 
 static int g_programExitCode = INT_MIN;
 
-#ifdef __EMSCRIPTEN__
-static inline void webPublishGameState(DukePlayer_t const *pPlayer)
-{
-    auto const &submittedInput = inputfifo[0][myconnectindex];
-    int const currentWeapon = pPlayer->curr_weapon >= 0 ? pPlayer->curr_weapon : 0;
-    int const currentAmmo =
-        (unsigned)currentWeapon < MAX_WEAPONS ? pPlayer->ammo_amount[currentWeapon] : 0;
-
-    EM_ASM({
-        let state = globalThis.__edukeState || (globalThis.__edukeState = {});
-        state.frameCounter = $0;
-        state.totalclock = $1;
-        state.ototalclock = $2;
-        state.moveThingsCount = $3;
-        state.ready2send = $4;
-        state.gm = $5;
-        state.cursectnum = $6;
-        state.x = $7;
-        state.y = $8;
-        state.z = $9;
-    },
-    (int)g_frameCounter,
-    (int)totalclock,
-    (int)ototalclock,
-    (int)g_moveThingsCount,
-    (int)ready2send,
-    (int)pPlayer->gm,
-    (int)pPlayer->cursectnum,
-    pPlayer->pos.x,
-    pPlayer->pos.y,
-    pPlayer->pos.z);
-
-    EM_ASM({
-        let state = globalThis.__edukeState || (globalThis.__edukeState = {});
-        state.ang = $0;
-        state.horiz = $1;
-        state.weapon = $2;
-        state.ammo = $3;
-        state.kickback = $4;
-        state.localBits = $5 >>> 0;
-        state.localExtBits = $6 >>> 0;
-        state.localFvel = $7;
-        state.localSvel = $8;
-        state.localAvel = $9;
-    },
-    fix16_to_int(pPlayer->q16ang),
-    fix16_to_int(pPlayer->q16horiz),
-    currentWeapon,
-    currentAmmo,
-    (int)pPlayer->kickback_pic,
-    (int)localInput.bits,
-    (int)localInput.extbits,
-    (int)localInput.fvel,
-    (int)localInput.svel,
-    (int)localInput.q16avel);
-
-    EM_ASM({
-        let state = globalThis.__edukeState || (globalThis.__edukeState = {});
-        state.localHorz = $0;
-        state.submittedBits = $1 >>> 0;
-        state.submittedExtBits = $2 >>> 0;
-        state.submittedFvel = $3;
-        state.submittedSvel = $4;
-        state.submittedAvel = $5;
-        state.submittedHorz = $6;
-        state.injectedButtons = globalThis.__edukeInjectedButtonsObserved | 0;
-    },
-    (int)localInput.q16horz,
-    (int)submittedInput.bits,
-    (int)submittedInput.extbits,
-    (int)submittedInput.fvel,
-    (int)submittedInput.svel,
-    (int)submittedInput.q16avel,
-    (int)submittedInput.q16horz);
-}
-
-static inline void webPublishSubmittedInput(input_t const &input)
-{
-    EM_ASM({
-        let input = globalThis.__edukeSubmittedInput || (globalThis.__edukeSubmittedInput = {});
-        input.bits = $0 >>> 0;
-        input.extbits = $1 >>> 0;
-        input.fvel = $2;
-        input.svel = $3;
-        input.avel = $4;
-        input.horz = $5;
-    }, (int)input.bits, (int)input.extbits, (int)input.fvel, (int)input.svel, (int)input.q16avel, (int)input.q16horz);
-}
-
-static inline void webPublishDrawProgress(int phase, int32_t playerNum)
-{
-    DukePlayer_t const *pPlayer = g_player[playerNum].ps;
-    EM_ASM({
-        let progress = globalThis.__edukeDrawProgress || (globalThis.__edukeDrawProgress = {});
-        progress.phase = $0;
-        progress.playerNum = $1;
-        progress.sect = $2;
-        progress.x = $3;
-        progress.y = $4;
-        progress.z = $5;
-    }, phase, playerNum, (int)pPlayer->cursectnum, pPlayer->pos.x, pPlayer->pos.y, pPlayer->pos.z);
-}
-#endif
-
 static void dukeDrawFrameOnce(void)
 {
     MICROPROFILE_SCOPEI("Game", EDUKE32_FUNCTION, MP_YELLOWGREEN);
@@ -406,26 +299,20 @@ static void dukeDrawFrameOnce(void)
         G_HandleLocalKeys();
         OSD_DispatchQueued();
         P_GetInput(myconnectindex);
-#ifdef __EMSCRIPTEN__
-        webPublishGameState(g_player[myconnectindex].ps);
-#endif
+        G_BrowserPublishGameState(g_player[myconnectindex].ps);
     }
 
     int const smoothratio = calc_smoothratio(totalclock, ototalclock);
 
     G_DrawRooms(screenpeek, smoothratio);
 
-#ifdef __EMSCRIPTEN__
-    webPublishDrawProgress(30, myconnectindex);
-#endif
+    G_BrowserPublishDrawProgress(30, myconnectindex);
 
     if (videoGetRenderMode() >= REND_POLYMOST)
         G_DrawBackground();
     G_DisplayRest(smoothratio);
 
-#ifdef __EMSCRIPTEN__
-    webPublishDrawProgress(31, myconnectindex);
-#endif
+    G_BrowserPublishDrawProgress(31, myconnectindex);
 
 #if MICROPROFILE_ENABLED != 0
     for (auto &gv : aGameVars)
@@ -441,14 +328,10 @@ static void dukeDrawFrameOnce(void)
     g_lastFrameDuration = g_lastFrameEndTime - g_lastFrameStartTime;
     g_frameCounter++;
 
-#ifdef __EMSCRIPTEN__
-    webPublishDrawProgress(32, myconnectindex);
-#endif
+    G_BrowserPublishDrawProgress(32, myconnectindex);
 
     videoNextPage();
-#ifdef __EMSCRIPTEN__
-    webPublishDrawProgress(33, myconnectindex);
-#endif
+    G_BrowserPublishDrawProgress(33, myconnectindex);
     S_Update();
     g_lastFrameEndTime2 = timerGetNanoTicks();
     g_lastFrameDuration2 = g_lastFrameEndTime2 - g_lastFrameStartTime;
@@ -969,7 +852,7 @@ void G_DrawRooms(int32_t playerNum, int32_t smoothRatio)
     auto const  pPlayer    = thisPlayer.ps;
 
 #ifdef __EMSCRIPTEN__
-    webPublishDrawProgress(1, playerNum);
+    G_BrowserPublishDrawProgress(1, playerNum);
 #endif
 
     int const viewingRange = viewingrange;
@@ -1013,7 +896,7 @@ void G_DrawRooms(int32_t playerNum, int32_t smoothRatio)
     G_InterpolateLights(smoothRatio);
 
 #ifdef __EMSCRIPTEN__
-    webPublishDrawProgress(2, playerNum);
+    G_BrowserPublishDrawProgress(2, playerNum);
 #endif
 
     if (ud.camerasprite >= 0)
@@ -1047,11 +930,11 @@ void G_DrawRooms(int32_t playerNum, int32_t smoothRatio)
 #endif
             yax_preparedrawrooms();
 #ifdef __EMSCRIPTEN__
-            webPublishDrawProgress(21, playerNum);
+            G_BrowserPublishDrawProgress(21, playerNum);
 #endif
             renderDrawRoomsQ16(pSprite->x, pSprite->y, pSprite->z - ZOFFSET6, CAMERA(q16ang), fix16_from_int(pSprite->yvel), pSprite->sectnum);
 #ifdef __EMSCRIPTEN__
-            webPublishDrawProgress(22, playerNum);
+            G_BrowserPublishDrawProgress(22, playerNum);
 #endif
             yax_drawrooms(G_DoSpriteAnimations, pSprite->sectnum, 0, smoothRatio);
             G_DoSpriteAnimations(pSprite->x, pSprite->y, pSprite->z - ZOFFSET6, fix16_to_int(CAMERA(q16ang)), smoothRatio);
@@ -1309,7 +1192,7 @@ void G_DrawRooms(int32_t playerNum, int32_t smoothRatio)
         CAMERA(q16horiz) = fix16_clamp(CAMERA(q16horiz), F16(HORIZ_MIN), F16(HORIZ_MAX));
 
 #ifdef __EMSCRIPTEN__
-        webPublishDrawProgress(3, playerNum);
+        G_BrowserPublishDrawProgress(3, playerNum);
 #endif
 
         if (noDraw != 1)  // event return values other than 0 and 1 are reserved
@@ -1322,7 +1205,7 @@ void G_DrawRooms(int32_t playerNum, int32_t smoothRatio)
             G_HandleMirror(CAMERA(pos.x), CAMERA(pos.y), CAMERA(pos.z), CAMERA(q16ang), CAMERA(q16horiz), smoothRatio);
             G_ClearGotMirror();
 #ifdef __EMSCRIPTEN__
-            webPublishDrawProgress(4, playerNum);
+            G_BrowserPublishDrawProgress(4, playerNum);
 #endif
 #ifdef LEGACY_ROR
             G_SE40(smoothRatio);
@@ -1339,15 +1222,15 @@ void G_DrawRooms(int32_t playerNum, int32_t smoothRatio)
 #else
             yax_preparedrawrooms();
 #ifdef __EMSCRIPTEN__
-            webPublishDrawProgress(5, playerNum);
+            G_BrowserPublishDrawProgress(5, playerNum);
 #endif
             renderDrawRoomsQ16(CAMERA(pos.x),CAMERA(pos.y),CAMERA(pos.z),CAMERA(q16ang),CAMERA(q16horiz),CAMERA(sect));
 #ifdef __EMSCRIPTEN__
-            webPublishDrawProgress(6, playerNum);
+            G_BrowserPublishDrawProgress(6, playerNum);
 #endif
             yax_drawrooms(G_DoSpriteAnimations, CAMERA(sect), 0, smoothRatio);
 #ifdef __EMSCRIPTEN__
-            webPublishDrawProgress(7, playerNum);
+            G_BrowserPublishDrawProgress(7, playerNum);
 #endif
 #ifdef LEGACY_ROR
             if ((unsigned)ror_sprite < MAXSPRITES && drawing_ror == 1)  // viewing from bottom
@@ -1355,14 +1238,14 @@ void G_DrawRooms(int32_t playerNum, int32_t smoothRatio)
 #endif
             G_DoSpriteAnimations(CAMERA(pos.x),CAMERA(pos.y),CAMERA(pos.z),fix16_to_int(CAMERA(q16ang)),smoothRatio);
 #ifdef __EMSCRIPTEN__
-            webPublishDrawProgress(8, playerNum);
+            G_BrowserPublishDrawProgress(8, playerNum);
 #endif
 #ifdef LEGACY_ROR
             drawing_ror = 0;
 #endif
             renderDrawMasks();
 #ifdef __EMSCRIPTEN__
-            webPublishDrawProgress(9, playerNum);
+            G_BrowserPublishDrawProgress(9, playerNum);
 #endif
 #endif
         }
@@ -1431,7 +1314,7 @@ void G_DrawRooms(int32_t playerNum, int32_t smoothRatio)
     G_ResetConveyorInterp();
 
 #ifdef __EMSCRIPTEN__
-    webPublishDrawProgress(10, playerNum);
+    G_BrowserPublishDrawProgress(10, playerNum);
 #endif
 
     {
@@ -1463,7 +1346,7 @@ void G_DrawRooms(int32_t playerNum, int32_t smoothRatio)
     }
 
 #ifdef __EMSCRIPTEN__
-    webPublishDrawProgress(11, playerNum);
+    G_BrowserPublishDrawProgress(11, playerNum);
 #endif
 
     if (r_usenewaspect)
@@ -1473,13 +1356,13 @@ void G_DrawRooms(int32_t playerNum, int32_t smoothRatio)
     }
 
 #ifdef __EMSCRIPTEN__
-    webPublishDrawProgress(12, playerNum);
+    G_BrowserPublishDrawProgress(12, playerNum);
 #endif
 
     VM_OnEvent(EVENT_DISPLAYROOMSEND, g_player[screenpeek].ps->i, screenpeek);
 
 #ifdef __EMSCRIPTEN__
-    webPublishDrawProgress(13, playerNum);
+    G_BrowserPublishDrawProgress(13, playerNum);
 #endif
 }
 
@@ -6712,7 +6595,7 @@ void dukeFillInputForTic(void)
     }
 
 #ifdef __EMSCRIPTEN__
-    webPublishSubmittedInput(input);
+    G_BrowserPublishSubmittedInput(input);
 #endif
 
     localInput ={};
@@ -7296,6 +7179,8 @@ MAIN_LOOP_RESTART:
 
     do //main loop
     {
+        G_BrowserPublishLoopState(1, -1, 0);
+
         if (gameHandleEvents() && quitevent)
         {
             KB_KeyDown[sc_Escape] = 1;
@@ -7358,6 +7243,8 @@ MAIN_LOOP_RESTART:
                 g_gameUpdateAndDrawTime = g_gameUpdateTime + (double)g_lastFrameDuration * 1000.0 / (double)timerGetNanoTickRate();
         }
 
+        G_BrowserPublishLoopState(2, -1, gameUpdate ? 1 : 0);
+
         G_DoCheats();
 
         if (myplayer.gm & MODE_NEWGAME)
@@ -7379,6 +7266,7 @@ MAIN_LOOP_RESTART:
         else
         {
             int const fpsReady = engineFPSLimit((myplayer.gm & MODE_MENU) == MODE_MENU);
+            G_BrowserPublishLoopState(3, fpsReady, gameUpdate ? 1 : 0);
 
             if (fpsReady || g_saveRequested)
             {
@@ -7392,6 +7280,7 @@ MAIN_LOOP_RESTART:
                 }
 
                 g_switchRoutine(co_drawframe);
+                G_BrowserPublishLoopState(4, fpsReady, gameUpdate ? 1 : 0);
             }
         }
 
